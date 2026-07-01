@@ -1,0 +1,50 @@
+# ── Secrets — never commit (CLAUDE.md §5.2/§5.3) ──────────────────────────
+.env
+.env.local
+.env.*.local
+
+# Real club data — entire directory stays local (CLAUDE.md §5.3).
+# 실제 동아리 자료 — 디렉토리 전체를 로컬에만 둔다 (CLAUDE.md §5.3).
+data/
+
+# Access whitelists.
+# 접근 화이트리스트류.
+config/access*.yaml
+
+# Model weights.
+# 모델 가중치.
+*.gguf
+models/
+
+# Dev-internal docs — keep local during development.
+# 개발 내부 문서 — 개발 중에는 로컬에만 둔다.
+# (v1.2에서 ADR·아키텍처 문서를 선별·정리해 공개 예정 — dev-process.md Week 6)
+CLAUDE.md
+docs/
+
+# ── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ── Node / Next.js ─────────────────────────────────────────────────────────
+node_modules/
+web/.next/
+web/out/
+*.tsbuildinfo
+npm-debug.log*
+
+# ── Local tool state ───────────────────────────────────────────────────────
+.claude/settings.local.json
+
+# ── OS / editor ────────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+
+# ── Logs / runtime output ──────────────────────────────────────────────────
+logs/
+*.log
