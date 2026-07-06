@@ -54,3 +54,6 @@ npm-debug.log*
 # ── Logs / runtime output ──────────────────────────────────────────────────
 logs/
 *.log
+
+# venv marker at repo root (uv venv .)
+pyvenv.cfg

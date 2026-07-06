@@ -63,7 +63,13 @@ dependencies = [
     # ── Utilities ──────────────────────────────────────────────────────────
     "tenacity>=9.0",
     "watchdog>=6.0",
+
+    # ── CLI (MVP1 entry point) ─────────────────────────────────────────────
+    "typer>=0.15",
 ]
+
+[project.scripts]
+dajung = "api.app.cli:app"
 
 [dependency-groups]
 dev = [
@@ -103,3 +109,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["api/tests"]
+# External-service tests are opt-in: `uv run pytest -m external`.
+# 외부 서비스 테스트는 옵트인: `uv run pytest -m external`.
+addopts = "-m 'not external'"
+markers = [
+    "external: needs live services (Qdrant, Ollama, Anthropic API)",
+]
