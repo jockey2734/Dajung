@@ -4,6 +4,7 @@ Dajung Ark RAG의 임베딩 모듈.
 Wraps BGE-M3 to produce dense + sparse vectors for Qdrant hybrid search.
 Qdrant 하이브리드 검색에 쓰는 dense + sparse 벡터를 BGE-M3로 생성한다.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -106,7 +107,7 @@ class Embedder:
             return_colbert_vecs=False,
         )
         results: list[EmbeddingResult] = []
-        for dense, sparse in zip(out["dense_vecs"], out["lexical_weights"]):
+        for dense, sparse in zip(out["dense_vecs"], out["lexical_weights"], strict=True):
             results.append(
                 EmbeddingResult(
                     dense=dense.tolist(),

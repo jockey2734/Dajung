@@ -4,6 +4,7 @@ Dajung Ark의 로컬 LLM 클라이언트 — Ollama 백엔드.
 Used for the router/judge nodes and optional fully-local generation.
 라우터/판정 노드, 그리고 선택적 완전 로컬 생성에 쓴다.
 """
+
 from __future__ import annotations
 
 import os
@@ -72,7 +73,7 @@ class OllamaClient:
     async def chat(
         self,
         model: str,
-        messages: list[dict],
+        messages: list[dict[str, str]],
         *,
         temperature: float = 0.6,
         keep_alive: str = "5m",
@@ -95,7 +96,8 @@ class OllamaClient:
                 },
             )
             resp.raise_for_status()
-            return resp.json()["message"]["content"]
+            content: str = resp.json()["message"]["content"]
+            return content
 
     async def unload(self, model: str) -> None:
         """Evict a model from VRAM immediately (keep_alive=0).
