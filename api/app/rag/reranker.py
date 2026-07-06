@@ -28,17 +28,17 @@ def _get_reranker() -> FlagReranker:
     return _RERANKER
 
 
-def rerank(query: str, points: list[Any]) -> list[dict[str, Any]]:
-    """Precision-sort candidates; return top rerank_top_k with scores.
+def rerank(query: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Precision-sort candidate dicts; return top rerank_top_k with scores.
 
-    후보를 정밀 정렬해 상위 rerank_top_k를 점수와 함께 반환한다.
+    후보 dict를 정밀 정렬해 상위 rerank_top_k를 점수와 함께 반환한다.
+    Candidates are `{"payload": {...}, "score": float}` dicts (graph contract).
+    후보는 `{"payload": {...}, "score": float}` dict다 (그래프 계약).
     """
-    if not points:
+    if not candidates:
         return []
     pairs = [
-        [query, f"{p.payload['context_header']}\n{p.payload['text']}"]
-        for p in points
-        if p.payload is not None
+        [query, f"{c['payload']['context_header']}\n{c['payload']['text']}"] for c in candidates
     ]
     scores = _get_reranker().compute_score(pairs, normalize=True)
     if isinstance(scores, float):
@@ -47,10 +47,10 @@ def rerank(query: str, points: list[Any]) -> list[dict[str, Any]]:
         scores = [scores]
     ranked = sorted(
         (
-            {"payload": p.payload, "rerank_score": float(s)}
-            for p, s in zip(points, scores, strict=True)
+            {"payload": c["payload"], "rerank_score": float(s)}
+            for c, s in zip(candidates, scores, strict=True)
         ),
-        key=lambda item: item["rerank_score"],
+        key=lambda item: float(item["rerank_score"]),
         reverse=True,
     )
     return ranked[: settings.rerank_top_k]
