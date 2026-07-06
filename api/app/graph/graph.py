@@ -12,6 +12,7 @@ from typing import Any
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
+from api.app.graph.nodes.cite import cite_node
 from api.app.graph.nodes.clarify import clarify_node
 from api.app.graph.nodes.generate import generate_node
 from api.app.graph.nodes.generate_handover import generate_handover
@@ -40,6 +41,7 @@ def build_graph() -> Any:
     graph.add_node("generate", generate_node)
     graph.add_node("generate_handover", generate_handover)
     graph.add_node("clarify", clarify_node)
+    graph.add_node("cite", cite_node)
 
     graph.set_entry_point("router")
     graph.add_conditional_edges(
@@ -67,10 +69,9 @@ def build_graph() -> Any:
         },
     )
 
-    # Cite node (feat/ag-cite) will sit between generate and END.
-    # cite 노드(feat/ag-cite)가 generate와 END 사이에 들어올 예정.
-    graph.add_edge("generate", END)
-    graph.add_edge("generate_handover", END)
+    graph.add_edge("generate", "cite")
+    graph.add_edge("generate_handover", "cite")
+    graph.add_edge("cite", END)
     graph.add_edge("clarify", END)
 
     # PostgresSaver replaces MemorySaver in the serving phase (P3).
