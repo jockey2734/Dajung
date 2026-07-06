@@ -18,9 +18,15 @@ models/
 
 # Dev-internal docs — keep local during development.
 # 개발 내부 문서 — 개발 중에는 로컬에만 둔다.
-# (v1.2에서 ADR·아키텍처 문서를 선별·정리해 공개 예정 — dev-process.md Week 6)
+# (마무리 단계에서 ADR·아키텍처 문서를 선별·정리해 공개 예정)
 CLAUDE.md
+RAG.md
+club_ai_project_summary.md
 docs/
+
+# File inventory CSV — filenames contain real member names (PII).
+# 파일 목록 CSV — 파일명에 실명 포함 (개인정보).
+다정_파일목록.csv
 
 # ── Python ─────────────────────────────────────────────────────────────────
 __pycache__/
