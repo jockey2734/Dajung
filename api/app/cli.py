@@ -65,12 +65,18 @@ def ask(
 
     인덱싱된 동아리 지식에 질문한다.
     """
+    from api.app.rag.answer import run_ask
+
     try:
-        from api.app.rag.answer import run_ask
-    except ImportError as exc:
-        typer.echo(_NOT_IMPLEMENTED.format(branch="feat/cx-cli-rag"))
+        typer.echo(run_ask(question, user=CLI_USER, route=route, json_out=json_out, top_k=top_k))
+    except Exception as exc:
+        # Unreachable Qdrant/API must fail cleanly, never with a traceback.
+        # Qdrant·API에 못 닿으면 트레이스백 없이 깨끗하게 실패한다.
+        typer.echo(
+            f"실행 실패: {type(exc).__name__} — "
+            f"Qdrant({settings.qdrant_url})·API 연결을 확인하세요."
+        )
         raise typer.Exit(code=1) from exc
-    typer.echo(run_ask(question, user=CLI_USER, route=route, json_out=json_out, top_k=top_k))
 
 
 @app.command()
