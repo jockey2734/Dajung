@@ -44,17 +44,29 @@ def test_category_map_covers_all_rows() -> None:
         assert CATEGORY_MAP[category][0] == doc_type, category
 
 
-def test_member_roster_is_restricted_high() -> None:
+def test_member_roster_open_but_sensitive() -> None:
+    # 2026-07-07 policy: executives-only tool — rosters are open to all staff.
+    # 2026-07-07 정책: 운영진 전용 도구 — 명단은 전 staff에게 공개.
     row = CsvRow(category="회원명단-신청서", folder="", modified="2025-03-24 11:03")
     payload = build_payload(Path("24-1 다정회원명단.xlsx"), row, _chunk(), "h")
-    assert payload["restricted"] is True
+    assert payload["restricted"] is False
+    assert payload["sensitivity"] == "high"  # log-masking still applies later
+
+
+def test_chat_log_open_but_sensitive() -> None:
+    row = CsvRow(category="채팅기록", folder="", modified="")
+    payload = build_payload(Path("KakaoTalk_group.txt"), row, _chunk(), "h")
+    assert payload["restricted"] is False
     assert payload["sensitivity"] == "high"
 
 
-def test_chat_log_is_restricted() -> None:
-    row = CsvRow(category="채팅기록", folder="", modified="")
-    payload = build_payload(Path("KakaoTalk_group.txt"), row, _chunk(), "h")
-    assert payload["restricted"] is True
+def test_no_category_is_restricted_by_default() -> None:
+    # Only incidents are withheld, and those are excluded before indexing
+    # (ADR-013) — so no CATEGORY_MAP row may set restricted=True.
+    # 차단 대상은 사건사고뿐이고 그건 인덱싱 전에 제외된다(ADR-013) —
+    # 따라서 CATEGORY_MAP 어떤 행도 restricted=True면 안 된다.
+    for category, (_, restricted, _) in CATEGORY_MAP.items():
+        assert restricted is False, category
 
 
 def test_coffee_seminar_reclassified() -> None:

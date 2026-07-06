@@ -17,6 +17,11 @@ from api.app.ingest.chunker import Chunk
 
 # CSV category → (doc_type, restricted, sensitivity). Table from Dajung.md §8.5.
 # CSV 카테고리 → (doc_type, restricted, sensitivity). Dajung.md §8.5 표 그대로.
+# 2026-07-07 policy: executives-only tool — rosters/chat logs are OPEN.
+# Only past incidents are withheld, and those never enter the index (ADR-013).
+# sensitivity=high stays on PII rows for the future log-masking policy.
+# 2026-07-07 정책: 운영진 전용 도구 — 명단·채팅기록 공개. 차단은 사건사고뿐이며
+# 그건 인덱스에 아예 안 들어간다(ADR-013). sensitivity=high는 로그 마스킹용 유지.
 CATEGORY_MAP: dict[str, tuple[str, bool, str]] = {
     "인수인계": ("handover", False, "medium"),
     "회의록": ("minutes", False, "low"),
@@ -26,8 +31,8 @@ CATEGORY_MAP: dict[str, tuple[str, bool, str]] = {
     "지원금-보조금 신청": ("admin_doc", False, "low"),
     "행정서류-가이드": ("admin_doc", False, "low"),
     "제휴-제안서": ("admin_doc", False, "low"),
-    "회원명단-신청서": ("misc", True, "high"),
-    "채팅기록": ("misc", True, "high"),
+    "회원명단-신청서": ("misc", False, "high"),
+    "채팅기록": ("misc", False, "high"),
     "카페탐방": ("misc", False, "low"),
     "동방투어": ("misc", False, "low"),
     "홍보부스": ("misc", False, "low"),
