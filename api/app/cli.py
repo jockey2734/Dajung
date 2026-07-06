@@ -79,7 +79,11 @@ def stats() -> None:
     Qdrant 컬렉션 통계를 출력한다.
     """
     try:
-        from api.app.rag.qdrant_store import collection_stats
+        # collection_stats arrives with feat/cx-cli-ingest; a missing name
+        # raises ImportError at runtime, which we surface as a clean exit.
+        # collection_stats는 feat/cx-cli-ingest에서 추가된다. 이름이 없으면
+        # 런타임 ImportError가 나며, 깨끗한 종료로 안내한다.
+        from api.app.rag.qdrant_store import collection_stats  # type: ignore[attr-defined]
     except ImportError as exc:
         typer.echo(_NOT_IMPLEMENTED.format(branch="feat/cx-cli-ingest"))
         raise typer.Exit(code=1) from exc

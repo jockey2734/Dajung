@@ -1,0 +1,27 @@
+# Quality gate — permission regression suite must be green to merge.
+# 품질 게이트 — 권한 회귀 테스트가 초록이어야 머지 가능.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Sync dependencies
+        run: uv sync --frozen
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+      - name: Mypy (strict)
+        run: uv run mypy api
+      - name: Pytest (permission gate included)
+        run: uv run pytest -q
