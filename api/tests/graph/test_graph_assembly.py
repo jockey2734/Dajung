@@ -20,6 +20,7 @@ def test_graph_compiles_with_mvp1_nodes() -> None:
         "generate",
         "generate_handover",
         "clarify",
+        "cite",
     }
     assert expected <= nodes
     # judge must NOT exist (ADR-012 — deferred to MVP4+).
@@ -33,3 +34,5 @@ def test_graph_edges_route_correctly() -> None:
     assert ("retrieve_knowledge", "permission") in edges
     assert ("retrieve_handover", "permission") in edges
     assert ("permission", "rerank") in edges
+    assert ("generate", "cite") in edges
+    assert ("generate_handover", "cite") in edges
