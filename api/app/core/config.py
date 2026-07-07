@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     # 6개월 absolute 만료, 슬라이딩 갱신 없음 (SECURITY.md §3).
     jwt_expires_days: int = 180
     bcrypt_rounds: int = 12
+    # Login lockout: 5 failures within 5 min locks the email for 1 h (SECURITY.md §3).
+    # 로그인 잠금: 5분 내 5회 실패 시 해당 이메일 1시간 잠금 (SECURITY.md §3).
+    login_max_fails: int = 5
+    login_window_s: int = 300
+    login_lock_s: int = 3600
+    # Per-IP request budget on auth endpoints (slowapi format).
+    # 인증 엔드포인트의 IP당 요청 예산 (slowapi 형식).
+    rate_limit_ip: str = "20/minute"
 
     # --- database ---
     # Dev default only — production URL comes from .env (DAJUNG_DATABASE_URL).
