@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     router_model: str = "gemma4:e4b"
     router_timeout_s: float = 20.0
 
+    # --- database ---
+    # Dev default only — production URL comes from .env (DAJUNG_DATABASE_URL).
+    # 개발용 기본값 — 운영 URL은 .env(DAJUNG_DATABASE_URL)에서 주입한다.
+    database_url: str = "postgresql+asyncpg://dajung:dajung@localhost:5432/dajung"
+
     # --- qdrant ---
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
