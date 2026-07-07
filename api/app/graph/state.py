@@ -30,6 +30,9 @@ class State(TypedDict, total=False):
     candidates: list[dict[str, Any]]
     reranked: list[dict[str, Any]]
     retries: int
+    # Explicit next-node decision written by rerank_node (Dajung.md §8.15.3).
+    # rerank_node가 기록하는 명시적 다음 노드 결정 (Dajung.md §8.15.3).
+    route_after: str
     answer: str
     model_used: str
     citations: list[dict[str, Any]]

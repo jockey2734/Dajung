@@ -127,7 +127,8 @@ def run_ask(
     embedded = Embedder().encode_query(question)
     flt = build_permission_filter(user)
     hits = hybrid_search(embedded.dense, embedded.sparse, flt, settings.retrieve_limit)
-    reranked = rerank(question, hits)
+    candidates = [{"payload": h.payload, "score": h.score} for h in hits]
+    reranked = rerank(question, candidates)
     if top_k > 0:
         reranked = reranked[:top_k]
     log.info("ask", route=picked, hits=len(hits), reranked=len(reranked))
