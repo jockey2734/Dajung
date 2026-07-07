@@ -10,62 +10,52 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "python-multipart>=0.0.9",
     "sse-starlette>=2.1",
-
     # ── LLM — external APIs ────────────────────────────────────────────────
     "anthropic>=0.40",
     "google-genai>=1.0",
     "httpx>=0.27",
-
     # ── LangGraph + Postgres checkpointer ─────────────────────────────────
     "langgraph>=0.2",
     "langgraph-checkpoint-postgres>=2.0",
     "psycopg[binary,pool]>=3.2",
-
     # ── Local LLM — thin wrapper over Ollama REST API ─────────────────────
     # Ollama 컨테이너가 GPU를 담당. 이 클라이언트는 HTTP만 쏜다.
     "ollama>=0.4",
-
     # ── Vector DB ──────────────────────────────────────────────────────────
     "qdrant-client>=1.12",
-
     # ── Document parsing ───────────────────────────────────────────────────
     "docling>=2.5",
-
     # ── Embeddings + reranker — CPU 전용 (torch는 transitive로 유입) ────────
     # BGE-M3 dense+sparse, bge-reranker-v2-m3. GPU는 Ollama에 양보.
     "FlagEmbedding>=1.3",
-
     # ── Auth / security ────────────────────────────────────────────────────
     "pyjwt>=2.9",
     "bcrypt>=4.2",
     "slowapi>=0.1",
-
     # ── DB — async SQLAlchemy + asyncpg + Alembic ─────────────────────────
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg>=0.30",
     "alembic>=1.14",
-
     # ── Data analysis ─────────────────────────────────────────────────────
     # pandas 대신 polars. 시각화는 matplotlib.pyplot 직접 사용 (seaborn 제거).
     "polars>=1.0",
     "matplotlib>=3.9",
     "pyarrow>=17.0",
-
     # ── Config + env ───────────────────────────────────────────────────────
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "python-dotenv>=1.0",
-
     # ── Observability ──────────────────────────────────────────────────────
     "structlog>=24.4",
     "loguru>=0.7",
-
     # ── Utilities ──────────────────────────────────────────────────────────
     "tenacity>=9.0",
     "watchdog>=6.0",
-
     # ── CLI (MVP1 entry point) ─────────────────────────────────────────────
     "typer>=0.15",
+    "markitdown>=0.1.6",
+    "pymupdf>=1.28.0",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]

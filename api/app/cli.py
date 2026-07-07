@@ -14,6 +14,7 @@ from typing import Annotated
 
 import typer
 
+from api.app.core.config import settings
 from api.app.core.logging import configure_logging
 
 app = typer.Typer(name="dajung", no_args_is_help=True, add_completion=False)
@@ -78,16 +79,15 @@ def stats() -> None:
 
     Qdrant 컬렉션 통계를 출력한다.
     """
+    from api.app.rag.qdrant_store import collection_stats
+
     try:
-        # collection_stats arrives with feat/cx-cli-ingest; a missing name
-        # raises ImportError at runtime, which we surface as a clean exit.
-        # collection_stats는 feat/cx-cli-ingest에서 추가된다. 이름이 없으면
-        # 런타임 ImportError가 나며, 깨끗한 종료로 안내한다.
-        from api.app.rag.qdrant_store import collection_stats  # type: ignore[attr-defined]
-    except ImportError as exc:
-        typer.echo(_NOT_IMPLEMENTED.format(branch="feat/cx-cli-ingest"))
+        typer.echo(collection_stats())
+    except Exception as exc:
+        # Fail loudly but cleanly when Qdrant is unreachable (no traceback).
+        # Qdrant에 못 닿으면 트레이스백 없이 명확하게 실패한다.
+        typer.echo(f"Qdrant 연결 실패 ({settings.qdrant_url}): {type(exc).__name__}")
         raise typer.Exit(code=1) from exc
-    typer.echo(collection_stats())
 
 
 if __name__ == "__main__":
