@@ -103,6 +103,55 @@ def render(answer: str, route: str, citations: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def run_ask_graph(
+    question: str,
+    user: dict[str, str],
+    route: str = "auto",
+    json_out: bool = False,
+    top_k: int = 0,
+) -> str:
+    """Graph-backed answer for `dajung ask` (feat/cl-integrate).
+
+    `dajung ask`용 그래프 경유 답변 (feat/cl-integrate).
+    """
+    import asyncio
+    import uuid
+
+    from api.app.graph.graph import get_app
+    from api.app.graph.state import Route, State
+    from api.app.rag.qdrant_store import get_client
+
+    # Fast fail before loading heavy models (same UX as the serial path).
+    # 무거운 모델 로드 전 빠른 실패 (직렬 경로와 동일한 UX).
+    if not get_client().collection_exists(settings.collection):
+        return f"컬렉션 '{settings.collection}' 없음 — 먼저 `dajung ingest`를 실행하세요."
+
+    state: State = {"query": question, "user": user}
+    if route in ("knowledge", "handover"):
+        state["route"] = Route(f"{route}_query")
+
+    config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    final = asyncio.run(get_app().ainvoke(state, config))
+
+    citations = final.get("citations", [])
+    if top_k > 0:
+        citations = [c for c in citations if c["marker"] <= top_k]
+    picked = str(final.get("route", "knowledge_query")).replace("Route.", "")
+
+    if json_out:
+        return jsonlib.dumps(
+            {
+                "answer": final.get("answer", ""),
+                "route": picked,
+                "model": final.get("model_used", ""),
+                "citations": citations,
+            },
+            ensure_ascii=False,
+            indent=1,
+        )
+    return render(final.get("answer", ""), picked, citations)
+
+
 def run_ask(
     question: str,
     user: dict[str, str],
@@ -110,9 +159,9 @@ def run_ask(
     json_out: bool = False,
     top_k: int = 0,
 ) -> str:
-    """Serial RAG answer for `dajung ask`.
+    """Serial RAG answer — kept as a graph-bypass debug path.
 
-    `dajung ask`용 직렬 RAG 답변.
+    직렬 RAG 답변 — 그래프 우회 디버그 경로로 유지.
     """
     from api.app.rag.qdrant_store import get_client
 

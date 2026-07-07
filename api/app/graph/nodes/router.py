@@ -85,6 +85,12 @@ async def router_node(state: State) -> dict[str, Any]:
     """
     assert "query" in state
     query = state["query"]
+
+    # CLI --route flag pre-sets the route — skip Ollama entirely (§8.2).
+    # CLI --route 플래그가 라우트를 선지정하면 Ollama를 건너뛴다 (§8.2).
+    if "route" in state:
+        log.info("router", route=str(state["route"]), backend="forced", latency_ms=0)
+        return {"route": state["route"], "retries": 0}
     started = time.monotonic()
     backend = "local"
 

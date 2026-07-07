@@ -65,10 +65,12 @@ def ask(
 
     인덱싱된 동아리 지식에 질문한다.
     """
-    from api.app.rag.answer import run_ask
+    from api.app.rag.answer import run_ask_graph
 
     try:
-        typer.echo(run_ask(question, user=CLI_USER, route=route, json_out=json_out, top_k=top_k))
+        typer.echo(
+            run_ask_graph(question, user=CLI_USER, route=route, json_out=json_out, top_k=top_k)
+        )
     except Exception as exc:
         # Unreachable Qdrant/API must fail cleanly, never with a traceback.
         # Qdrant·API에 못 닿으면 트레이스백 없이 깨끗하게 실패한다.
