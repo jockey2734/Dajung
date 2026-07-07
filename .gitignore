@@ -57,3 +57,7 @@ logs/
 
 # venv marker at repo root (uv venv .)
 pyvenv.cfg
+
+# Agent worktrees — never track.
+# 에이전트 워크트리 — 추적 금지.
+.claude/worktrees/
