@@ -41,6 +41,20 @@ class Settings(BaseSettings):
     router_model: str = "gemma4:e4b"
     router_timeout_s: float = 20.0
 
+    # --- auth ---
+    # Set via .env: DAJUNG_JWT_SECRET=$(openssl rand -hex 32). Empty = refuse to sign.
+    # .env로 주입: DAJUNG_JWT_SECRET=$(openssl rand -hex 32). 비어 있으면 서명 거부.
+    jwt_secret: str = ""
+    # 6-month absolute expiry, no sliding renewal (SECURITY.md §3).
+    # 6개월 absolute 만료, 슬라이딩 갱신 없음 (SECURITY.md §3).
+    jwt_expires_days: int = 180
+    bcrypt_rounds: int = 12
+
+    # --- database ---
+    # Dev default only — production URL comes from .env (DAJUNG_DATABASE_URL).
+    # 개발용 기본값 — 운영 URL은 .env(DAJUNG_DATABASE_URL)에서 주입한다.
+    database_url: str = "postgresql+asyncpg://dajung:dajung@localhost:5432/dajung"
+
     # --- qdrant ---
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
