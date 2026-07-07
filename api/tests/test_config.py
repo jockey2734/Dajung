@@ -19,7 +19,7 @@ def test_defaults_match_spec() -> None:
     assert s.rerank_threshold == 0.5
     assert s.retrieve_limit == 20
     assert s.rerank_top_k == 5
-    assert s.max_retries == 1
+    assert s.max_retries == 2
     assert s.chunk_max_chars == 1600
 
 
