@@ -18,7 +18,7 @@ def test_email_masked() -> None:
 
 
 def test_student_id_masked() -> None:
-    assert mask_pii("학번 202031234 확인") == "학번 [학번] 확인"
+    assert mask_pii("학번 2019310704 확인") == "학번 [학번] 확인"
 
 
 def test_free_text_names_pass_through() -> None:
@@ -29,5 +29,5 @@ def test_free_text_names_pass_through() -> None:
 
 
 def test_mixed_content() -> None:
-    out = mask_pii("김OO(202131000, kim@skku.edu, 010-1111-2222)")
+    out = mask_pii("김OO(2019310704, kim@skku.edu, 010-1111-2222)")
     assert "[학번]" in out and "[이메일]" in out and "[전화]" in out

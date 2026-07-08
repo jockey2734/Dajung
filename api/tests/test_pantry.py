@@ -168,6 +168,14 @@ async def test_pantry_banner_calculation(api_harness: ApiHarness) -> None:
     assert data["coffee_alert"]["alert"] is False
 
 
+async def test_pantry_rejects_invalid_sort_and_order(api_harness: ApiHarness) -> None:
+    client, factory, _ = api_harness
+    headers, _ = await _headers_and_user(factory)
+
+    assert (await client.get("/pantry?sort=bad", headers=headers)).status_code == 422
+    assert (await client.get("/pantry?order=bad", headers=headers)).status_code == 422
+
+
 async def test_pantry_requires_auth(api_harness: ApiHarness) -> None:
     client, *_ = api_harness
     assert (await client.get("/pantry")).status_code == 401

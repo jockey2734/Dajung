@@ -18,6 +18,7 @@ from api.app.schemas.pantry import (
     CoffeeAlertOut,
     PantryItemCreate,
     PantryItemOut,
+    PantryItemResponse,
     PantryItemUpdate,
     PantryListResponse,
     PantryUserOut,
@@ -63,8 +64,8 @@ def _calculate_coffee_alert(items: list[PantryItem]) -> CoffeeAlertOut:
 async def get_pantry_items(
     current_user: CurrentUser,
     session: SessionDep,
-    sort: str = "updated_at",
-    order: str = "desc",
+    sort: Literal["updated_at", "name", "remaining_pct"] = "updated_at",
+    order: Literal["asc", "desc"] = "desc",
 ) -> PantryListResponse:
     # We join with User to get updated_by details.
     stmt = select(PantryItem, User).join(User, PantryItem.updated_by == User.id)
@@ -91,7 +92,7 @@ async def get_pantry_items(
 @router.post("", status_code=201)
 async def create_pantry_item(
     req: PantryItemCreate, current_user: CurrentUser, session: SessionDep
-) -> dict[str, Any]:
+) -> PantryItemResponse:
     new_item = PantryItem(
         name=req.name,
         kind=req.kind,
@@ -110,10 +111,9 @@ async def create_pantry_item(
     all_items = [row[0] for row in all_items_res.all()]
     coffee_alert = _calculate_coffee_alert(all_items)
 
-    return {
-        "item": _build_item_out(new_item, current_user).model_dump(mode="json"),
-        "coffee_alert": coffee_alert.model_dump(mode="json"),
-    }
+    return PantryItemResponse(
+        item=_build_item_out(new_item, current_user), coffee_alert=coffee_alert
+    )
 
 
 @router.patch("/{item_id}")
@@ -122,7 +122,7 @@ async def update_pantry_item(
     req: PantryItemUpdate,
     current_user: CurrentUser,
     session: SessionDep,
-) -> dict[str, Any]:
+) -> PantryItemResponse:
     stmt = select(PantryItem).where(PantryItem.id == item_id)
     result = await session.execute(stmt)
     item = result.scalar_one_or_none()
@@ -149,10 +149,7 @@ async def update_pantry_item(
     all_items = [row[0] for row in all_items_res.all()]
     coffee_alert = _calculate_coffee_alert(all_items)
 
-    return {
-        "item": _build_item_out(item, current_user).model_dump(mode="json"),
-        "coffee_alert": coffee_alert.model_dump(mode="json"),
-    }
+    return PantryItemResponse(item=_build_item_out(item, current_user), coffee_alert=coffee_alert)
 
 
 @router.delete("/{item_id}", status_code=204)

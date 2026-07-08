@@ -206,7 +206,7 @@ async def chat_stream(
                             {"stage": "generating", "label": _STATUS_LABELS["generating"]},
                         )
                     elif node in ("generate", "generate_handover", "clarify"):
-                        answer = str(out.get("answer", ""))
+                        answer = mask_pii(str(out.get("answer", "")))
                         model_used = str(out.get("model_used", ""))
                         # Pseudo token stream — whole answers re-chunked; true
                         # token streaming lands with a streaming generate node.
@@ -215,7 +215,7 @@ async def chat_stream(
                         for piece in _chunk_text(answer, settings.sse_chunk_chars):
                             yield _sse("token", {"text": piece})
                     elif node == "cite":
-                        answer = str(out.get("answer", answer))
+                        answer = mask_pii(str(out.get("answer", answer)))
                         citations = list(out.get("citations", []))
                         yield _sse("citations", {"citations": citations})
 
@@ -227,7 +227,7 @@ async def chat_stream(
                 session_id=session_id,
                 user_id=None,
                 role="assistant",
-                content=mask_pii(answer),
+                content=answer,
                 sequence_no=seq,
                 status="completed",
                 meta={

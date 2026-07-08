@@ -70,8 +70,18 @@ def _override_graph(app: Any, *updates: dict[str, Any]) -> None:
 _HAPPY = (
     {"router": {"route": "knowledge_query", "retries": 0}},
     {"rerank": {"reranked": [], "route_after": "generate"}},
-    {"generate": {"answer": "개완은 이렇게 씁니다 [1].", "model_used": "claude-haiku-4-5"}},
-    {"cite": {"answer": "개완은 이렇게 씁니다 [1].", "citations": [{"marker": 1}]}},
+    {
+        "generate": {
+            "answer": "개완은 이렇게 씁니다. 연락처는 010-1234-5678 [1].",
+            "model_used": "claude-haiku-4-5",
+        }
+    },
+    {
+        "cite": {
+            "answer": "개완은 이렇게 씁니다. 연락처는 010-1234-5678 [1].",
+            "citations": [{"marker": 1}],
+        }
+    },
 )
 
 
@@ -104,6 +114,9 @@ async def test_event_sequence_and_persistence(
     # webapp-plan §7 order: session → status* → route → token* → citations → done
     assert kinds[0] == "session" and kinds[-1] == "done"
     assert kinds.index("route") < kinds.index("token") < kinds.index("citations")
+    streamed_answer = "".join(data["text"] for event, data in events if event == "token")
+    assert "010-1234-5678" not in streamed_answer
+    assert "[전화]" in streamed_answer
     assert {"stage": "routing", "label": chat_mod._STATUS_LABELS["routing"]} == next(
         d for e, d in events if e == "status"
     )
@@ -117,6 +130,8 @@ async def test_event_sequence_and_persistence(
         runs = (await s.execute(select(ModelRun))).scalars().all()
         retrievals = (await s.execute(select(RetrievalEvent))).scalars().all()
     assert [r.role for r in rows] == ["user", "assistant"]
+    assert "010-1234-5678" not in rows[1].content
+    assert "[전화]" in rows[1].content
     assert rows[1].meta["route"] == "knowledge_query"
     assert rows[1].meta["citations"] == [{"marker": 1}]
     assert rows[1].status == "completed"

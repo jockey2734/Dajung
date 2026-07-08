@@ -15,7 +15,7 @@ import re
 # 패턴은 docs/webapp-spec.md S1 계약 그대로다.
 _PHONE = re.compile(r"01[016789]-?\d{3,4}-?\d{4}")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
-_STUDENT_ID = re.compile(r"(?<!\d)20\d{7}(?!\d)")
+_STUDENT_ID = re.compile(r"(?<!\d)20\d{8}(?!\d)")
 
 
 def mask_pii(text: str) -> str:
