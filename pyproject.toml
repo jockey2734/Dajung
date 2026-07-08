@@ -53,7 +53,7 @@ dependencies = [
     "watchdog>=6.0",
     # ── CLI (MVP1 entry point) ─────────────────────────────────────────────
     "typer>=0.15",
-    "markitdown>=0.1.6",
+    "markitdown[docx,pptx,xlsx]>=0.1.6",
     "pymupdf>=1.28.0",
     "pyyaml>=6.0.3",
 ]
