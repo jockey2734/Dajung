@@ -14,7 +14,7 @@ import uuid
 from typing import Annotated
 
 import jwt
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,17 @@ from api.app.db.models import User
 _bearer = HTTPBearer(auto_error=False)
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+async def get_checkpointer(request: Request) -> object | None:
+    """Return the lifespan-managed LangGraph checkpointer, if configured.
+
+    lifespan에서 관리하는 LangGraph checkpointer를 돌려준다. 없으면 None.
+    """
+    return getattr(request.app.state, "checkpointer", None)
+
+
+CheckpointerDep = Annotated[object | None, Depends(get_checkpointer)]
 
 
 async def get_current_user(

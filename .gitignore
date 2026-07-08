@@ -46,6 +46,7 @@ npm-debug.log*
 
 # ── Local tool state ───────────────────────────────────────────────────────
 .claude/settings.local.json
+.claude/worktrees/
 
 # ── OS / editor ────────────────────────────────────────────────────────────
 .DS_Store

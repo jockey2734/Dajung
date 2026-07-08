@@ -10,8 +10,12 @@ The factory pattern lets tests build a fresh app with clean state
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
@@ -20,11 +24,28 @@ from api.app.core.deps import SessionDep
 from api.app.core.errors import ApiError
 from api.app.core.lockout import LoginLockout
 from api.app.core.ratelimit import limiter
-from api.app.routes import auth
+from api.app.routes import auth, chat, files, pantry, privacy, sessions, uploads
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initialize optional serving-phase process resources.
+
+    서빙 단계 프로세스 리소스를 초기화한다.
+    """
+    app.state.checkpointer = None
+    if settings.database_url.startswith("postgresql"):
+        checkpoint_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+        async with AsyncPostgresSaver.from_conn_string(checkpoint_url) as checkpointer:
+            await checkpointer.setup()
+            app.state.checkpointer = checkpointer
+            yield
+    else:
+        yield
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Dajung Ark API", version="0.1.0")
+    app = FastAPI(title="Dajung Ark API", version="0.1.0", lifespan=lifespan)
     app.state.limiter = limiter
     app.state.lockout = LoginLockout(
         max_fails=settings.login_max_fails,
@@ -54,24 +75,59 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(auth.router)
+    app.include_router(chat.router)
+    app.include_router(sessions.router)
+    app.include_router(files.router)
+    app.include_router(privacy.router)
+    app.include_router(pantry.router)
+    app.include_router(uploads.router)
 
     @app.get("/healthz")
     async def healthz(session: SessionDep) -> dict[str, str]:
-        # Qdrant/Ollama probes arrive with the serving branch (cx-api-serve).
-        # Qdrant/Ollama 프로브는 서빙 브랜치(cx-api-serve)에서 붙는다.
         try:
             await session.execute(text("SELECT 1"))
             db_status = "ok"
         except Exception:  # noqa: BLE001 — health probe must never raise
             db_status = "down"
+        qdrant_status = await _probe_qdrant()
+        ollama_status = await _probe_ollama()
+        all_ok = db_status == qdrant_status == ollama_status == "ok"
         return {
-            "status": "ok" if db_status == "ok" else "degraded",
+            "status": "ok" if all_ok else "degraded",
             "db": db_status,
-            "qdrant": "not_checked",
-            "ollama": "not_checked",
+            "qdrant": qdrant_status,
+            "ollama": ollama_status,
         }
 
     return app
+
+
+async def _probe_qdrant() -> str:
+    """Reachability probe — must never raise (ARCHITECTURE §10).
+
+    연결 프로브 — 절대 예외를 던지지 않는다 (ARCHITECTURE §10).
+    """
+    from starlette.concurrency import run_in_threadpool
+
+    from api.app.rag.qdrant_store import get_client
+
+    try:
+        await run_in_threadpool(get_client().get_collections)
+        return "ok"
+    except Exception:  # noqa: BLE001 — health probe must never raise
+        return "down"
+
+
+async def _probe_ollama() -> str:
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.health_probe_timeout_s) as client:
+            resp = await client.get(f"{settings.ollama_base_url}/api/tags")
+            resp.raise_for_status()
+        return "ok"
+    except Exception:  # noqa: BLE001 — health probe must never raise
+        return "down"
 
 
 app = create_app()

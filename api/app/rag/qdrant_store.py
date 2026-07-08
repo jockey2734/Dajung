@@ -47,7 +47,15 @@ _PAYLOAD_INDEXES: dict[str, PayloadSchemaType] = {
 
 @lru_cache(maxsize=1)
 def get_client() -> QdrantClient:
-    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None)
+    """Return the process-wide Qdrant client.
+
+    프로세스 전역 Qdrant 클라이언트를 돌려준다.
+    """
+    return QdrantClient(
+        url=settings.qdrant_url,
+        api_key=settings.qdrant_api_key or None,
+        check_compatibility=False,
+    )
 
 
 def build_permission_filter(user: dict[str, str]) -> Filter | None:
