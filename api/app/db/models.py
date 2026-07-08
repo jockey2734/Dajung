@@ -140,6 +140,41 @@ class Message(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Attachment(Base):
+    """Conversation-scoped uploaded file and parsed text cache.
+
+    대화 첨부 파일과 파싱 텍스트 캐시.
+    """
+
+    __tablename__ = "attachments"
+    __table_args__ = (
+        CheckConstraint(
+            "parse_status IN ('pending', 'parsed', 'failed')", name="ck_attachments_parse_status"
+        ),
+        Index("ix_attachments_user_id", "user_id"),
+        Index("ix_attachments_sha256", "sha256"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
+    # Nullable until the user sends a chat turn with the attachment.
+    # 첨부를 포함해 채팅을 보내기 전까지는 NULL일 수 있다.
+    session_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("chat_sessions.id"))
+    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("messages.id"))
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    original_filename: Mapped[str] = mapped_column(Text)
+    mime_type: Mapped[str] = mapped_column(String(255))
+    byte_size: Mapped[int] = mapped_column(Integer())
+    sha256: Mapped[str] = mapped_column(String(64))
+    storage_path: Mapped[str] = mapped_column(Text)
+    parsed_text: Mapped[str] = mapped_column(Text, default="")
+    parsed_chars: Mapped[int] = mapped_column(Integer(), default=0)
+    parse_status: Mapped[str] = mapped_column(String(10), default="pending")
+    parse_error: Mapped[str | None] = mapped_column(Text)
+    promoted_doc_id: Mapped[uuid.UUID | None] = mapped_column(Uuid())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ModelRun(Base):
     """Metadata for one AI call, without raw prompts/responses (ADR-009).
 
