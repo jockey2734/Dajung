@@ -57,3 +57,8 @@ class CoffeeAlertOut(BaseModel):
 class PantryListResponse(BaseModel):
     items: list[PantryItemOut]
     coffee_alert: CoffeeAlertOut
+
+
+class PantryItemResponse(BaseModel):
+    item: PantryItemOut
+    coffee_alert: CoffeeAlertOut

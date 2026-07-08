@@ -1,8 +1,8 @@
 """Session history endpoints — sidebar list, detail, soft delete.
 
 세션 이력 엔드포인트 — 사이드바 목록·상세·soft delete.
-Contract: webapp-plan §7. Others' resources → 403 (webapp-plan §5).
-계약: webapp-plan §7. 타인 자원 → 403 (webapp-plan §5).
+Contract: webapp-plan §7. Others' resources → 404 (serving-plan §9).
+계약: webapp-plan §7. 타인 자원 → 404 (serving-plan §9).
 """
 
 from __future__ import annotations
