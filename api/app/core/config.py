@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     retrieve_limit: int = 20
     rerank_top_k: int = 5
     rerank_threshold: float = 0.5
-    max_retries: int = 1
+    max_retries: int = 2
 
     # --- chunking (chars, not tokens — 한국어 기준 근사) ---
     chunk_max_chars: int = 1600
