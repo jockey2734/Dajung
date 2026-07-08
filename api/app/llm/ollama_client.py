@@ -77,24 +77,27 @@ class OllamaClient:
         *,
         temperature: float = 0.6,
         keep_alive: str = "5m",
+        format: str | None = None,
     ) -> str:
         """Run a non-streaming chat completion on a local model.
 
         로컬 모델로 비스트리밍 채팅 완성을 실행한다.
         keep_alive controls how long Ollama keeps the model in VRAM.
         keep_alive은 Ollama가 모델을 VRAM에 유지하는 시간을 정한다.
+        format="json" forces structured output (router node).
+        format="json"은 구조화 출력을 강제한다 (라우터 노드).
         """
+        body: dict[str, object] = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "keep_alive": keep_alive,
+            "options": {"temperature": temperature},
+        }
+        if format is not None:
+            body["format"] = format
         async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(
-                f"{self._host}/api/chat",
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "stream": False,
-                    "keep_alive": keep_alive,
-                    "options": {"temperature": temperature},
-                },
-            )
+            resp = await client.post(f"{self._host}/api/chat", json=body)
             resp.raise_for_status()
             content: str = resp.json()["message"]["content"]
             return content
