@@ -24,7 +24,7 @@ from api.app.core.deps import SessionDep
 from api.app.core.errors import ApiError
 from api.app.core.lockout import LoginLockout
 from api.app.core.ratelimit import limiter
-from api.app.routes import auth, chat, files, pantry, privacy, sessions
+from api.app.routes import auth, chat, files, pantry, privacy, sessions, uploads
 
 
 @asynccontextmanager
@@ -80,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(files.router)
     app.include_router(privacy.router)
     app.include_router(pantry.router)
+    app.include_router(uploads.router)
 
     @app.get("/healthz")
     async def healthz(session: SessionDep) -> dict[str, str]:
