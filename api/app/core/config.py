@@ -58,6 +58,17 @@ class Settings(BaseSettings):
     # 인증 엔드포인트의 IP당 요청 예산 (slowapi 형식).
     rate_limit_ip: str = "20/minute"
 
+    # --- chat serving ---
+    # Daily question budget per user (2026-07-07 decision: 20).
+    # 사용자당 일일 질문 한도 (2026-07-07 결정: 20회).
+    daily_chat_limit: int = 20
+    # SSE pseudo-token chunk size in chars (whole answers re-chunked).
+    # SSE 유사 토큰 조각 크기(문자) — 통째 답변을 재분할한다.
+    sse_chunk_chars: int = 60
+    # Health-probe timeout for qdrant/ollama.
+    # qdrant/ollama 헬스 프로브 타임아웃.
+    health_probe_timeout_s: float = 2.0
+
     # --- database ---
     # Dev default only — production URL comes from .env (DAJUNG_DATABASE_URL).
     # 개발용 기본값 — 운영 URL은 .env(DAJUNG_DATABASE_URL)에서 주입한다.

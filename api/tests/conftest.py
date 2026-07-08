@@ -5,10 +5,50 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+ApiHarness = tuple[AsyncClient, "async_sessionmaker[AsyncSession]", FastAPI]
+
+
+@pytest.fixture
+async def api_harness(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[ApiHarness]:
+    """App + in-memory SQLite + client — shared by serving-route tests.
+
+    앱 + 인메모리 SQLite + 클라이언트 — 서빙 라우트 테스트 공용.
+    """
+    from api.app.core.config import settings
+    from api.app.core.ratelimit import limiter
+    from api.app.db.base import Base, get_session
+    from api.app.main import create_app
+
+    monkeypatch.setattr(settings, "bcrypt_rounds", 4)
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret")
+
+    engine = create_async_engine("sqlite+aiosqlite://")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    app = create_app()
+
+    async def _override() -> AsyncIterator[AsyncSession]:
+        async with factory() as session:
+            yield session
+
+    app.dependency_overrides[get_session] = _override
+    limiter.reset()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client, factory, app
+    await engine.dispose()
 
 
 @pytest.fixture
