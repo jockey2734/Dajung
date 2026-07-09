@@ -1,0 +1,20 @@
+{
+  "name": "Dajung AI",
+  "short_name": "Dajung AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF5DA",
+  "theme_color": "#422A1E",
+  "icons": [
+    {
+      "src": "/icons/mascot-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/mascot-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
