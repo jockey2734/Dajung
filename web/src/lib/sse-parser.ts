@@ -69,7 +69,7 @@ export type ChatSSEEvent =
   | { type: "route"; route: string }
   | { type: "token"; text: string }
   | { type: "citations"; citations: Citation[] }
-  | { type: "done"; latency_ms: number; model_used: string; session_id: string }
+  | { type: "done"; latency_ms: number; model_used: string; session_id: string; remaining: number }
   | { type: "error"; error: { code: string; message: string } };
 
 // Maps a raw SSE frame to the typed union above. Unknown event names are
@@ -98,6 +98,7 @@ export function toChatSSEEvent(raw: RawSSEEvent): ChatSSEEvent | null {
           latency_ms: Number(data.latency_ms),
           model_used: String(data.model_used),
           session_id: String(data.session_id),
+          remaining: Number(data.remaining),
         };
       case "error":
         return { type: "error", error: data.error as { code: string; message: string } };

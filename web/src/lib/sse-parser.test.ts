@@ -79,8 +79,11 @@ describe("toChatSSEEvent", () => {
       ],
     });
     expect(
-      toChatSSEEvent({ event: "done", data: '{"latency_ms":120,"model_used":"claude-haiku-4-5","session_id":"s1"}' }),
-    ).toEqual({ type: "done", latency_ms: 120, model_used: "claude-haiku-4-5", session_id: "s1" });
+      toChatSSEEvent({
+        event: "done",
+        data: '{"latency_ms":120,"model_used":"claude-haiku-4-5","session_id":"s1","remaining":17}',
+      }),
+    ).toEqual({ type: "done", latency_ms: 120, model_used: "claude-haiku-4-5", session_id: "s1", remaining: 17 });
     expect(
       toChatSSEEvent({ event: "error", data: '{"error":{"code":"llm_down","message":"응답 생성 중 오류가 발생했습니다."}}' }),
     ).toEqual({ type: "error", error: { code: "llm_down", message: "응답 생성 중 오류가 발생했습니다." } });
@@ -110,7 +113,7 @@ describe("readChatSSEStream", () => {
     const chunks = [
       'event: session\ndata: {"session_id":"s1"}\n\nevent: stat',
       'us\ndata: {"stage":"routing","label":"질문을 분류하고 있어요"}\n\n',
-      'event: done\ndata: {"latency_ms":50,"model_used":"claude-haiku-4-5","session_id":"s1"}\n\n',
+      'event: done\ndata: {"latency_ms":50,"model_used":"claude-haiku-4-5","session_id":"s1","remaining":13}\n\n',
     ];
     const received = [];
     for await (const event of readChatSSEStream(streamFrom(chunks))) {
@@ -119,7 +122,7 @@ describe("readChatSSEStream", () => {
     expect(received).toEqual([
       { type: "session", session_id: "s1" },
       { type: "status", stage: "routing", label: "질문을 분류하고 있어요" },
-      { type: "done", latency_ms: 50, model_used: "claude-haiku-4-5", session_id: "s1" },
+      { type: "done", latency_ms: 50, model_used: "claude-haiku-4-5", session_id: "s1", remaining: 13 },
     ]);
   });
 });
