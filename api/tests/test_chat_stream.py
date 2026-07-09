@@ -114,6 +114,8 @@ async def test_event_sequence_and_persistence(
     # webapp-plan §7 order: session → status* → route → token* → citations → done
     assert kinds[0] == "session" and kinds[-1] == "done"
     assert kinds.index("route") < kinds.index("token") < kinds.index("citations")
+    done = next(d for e, d in events if e == "done")
+    assert done["remaining"] == settings.daily_chat_limit - 1
     streamed_answer = "".join(data["text"] for event, data in events if event == "token")
     assert "010-1234-5678" not in streamed_answer
     assert "[전화]" in streamed_answer
@@ -199,6 +201,34 @@ async def test_user_memory_added_to_graph_state(
 
     assert resp.status_code == 200
     assert seen_states[0]["user_memory"] == "- 인수인계 문서를 자주 확인함"
+
+
+async def test_done_remaining_reflects_current_turn(
+    api_harness: ApiHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, factory, app = api_harness
+    user, headers = await _seed_user(factory)
+    _override_graph(app, *_HAPPY)
+    monkeypatch.setattr(settings, "daily_chat_limit", 3)
+    async with factory() as s:
+        chat = ChatSession(user_id=user.id, title="이전", status="active", meta={})
+        s.add(chat)
+        await s.flush()
+        s.add(
+            Message(
+                session_id=chat.id,
+                user_id=user.id,
+                role="user",
+                content="이전 질문",
+                sequence_no=1,
+            )
+        )
+        await s.commit()
+
+    resp = await client.post("/chat/stream", json={"query": "남은 횟수?"}, headers=headers)
+    assert resp.status_code == 200
+    done = next(data for event, data in _events(resp.text) if event == "done")
+    assert done["remaining"] == 1
 
 
 async def test_daily_limit_blocks(api_harness: ApiHarness, monkeypatch: pytest.MonkeyPatch) -> None:
