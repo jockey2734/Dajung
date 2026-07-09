@@ -350,12 +350,17 @@ async def chat_stream(
                 if new_title:
                     chat_row.title = new_title[:_TITLE_CHARS]
             await session.commit()
+            remaining = max(
+                0,
+                settings.daily_chat_limit - await _today_user_count(session, current.id),
+            )
             yield _sse(
                 "done",
                 {
                     "latency_ms": latency_ms,
                     "model_used": model_used,
                     "session_id": str(session_id),
+                    "remaining": remaining,
                 },
             )
         except Exception as exc:
