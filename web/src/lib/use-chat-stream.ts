@@ -4,14 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readChatSSEStream } from "@/lib/sse-parser";
 import type { AttachmentChip, ChatMessage, Citation, SessionSummary } from "@/lib/chat-types";
 
-// api/app/core/config.py's `daily_chat_limit` default. No endpoint exposes
-// today's already-used count (S1 only gates internally — webapp-spec S4
-// gap, flagged in the PR), so this counts down locally per completed turn
-// and resets to 20 on reload rather than reflecting the true server count.
-// api/app/core/config.py의 `daily_chat_limit` 기본값. 오늘 이미 쓴 횟수를
-// 돌려주는 엔드포인트가 없어서(S1은 내부 게이트만 — webapp-spec S4 갭, PR에
-// 기록) 완료된 턴마다 로컬로만 감소시키고, 새로고침하면 실제 서버 카운트가
-// 아니라 20으로 리셋된다.
+// Initial display before the first server `done.remaining` arrives.
+// 첫 서버 `done.remaining` 값이 오기 전 초기 표시값.
 const DAILY_CHAT_LIMIT = 20;
 
 let turnCounter = 0;
@@ -179,7 +173,7 @@ export function useChatStream() {
               break;
             case "done":
               patchAssistant({ status: "done" });
-              setRemaining((prev) => Math.max(0, prev - 1));
+              setRemaining(event.remaining);
               void loadSessions();
               break;
             case "error":
