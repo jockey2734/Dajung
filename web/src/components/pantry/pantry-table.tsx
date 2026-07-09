@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { ko } from "date-fns/locale";
 import { 
   ArrowDownIcon, 
   ArrowUpIcon, 
@@ -28,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { formatRelativeTime } from "@/lib/relative-time";
 
 import type { PantryItemOut, PantryKind, PantryRemainingPct, SortField, OrderField } from "@/types/pantry";
 
@@ -52,17 +51,6 @@ function RemainingSegmentBar({ pct, isCoffee }: { pct: PantryRemainingPct, isCof
       ))}
     </div>
   )
-}
-
-function KindBadge({ kind }: { kind: PantryKind }) {
-  const label = kind === "coffee" ? "커피" : kind === "tea" ? "차" : "기타";
-  const bgClass = kind === "coffee" ? "bg-espresso text-cream" : kind === "tea" ? "bg-tea-green-soft text-tea-green" : "bg-surface text-taupe border border-hairline";
-  
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-caption-bold ${bgClass}`}>
-      {label}
-    </span>
-  );
 }
 
 interface PantryTableProps {
@@ -258,13 +246,16 @@ function EditableRow({
   const [note, setNote] = useState(item.note || "");
   const [capacity, setCapacity] = useState(item.capacity_g?.toString() || "");
 
-  const handleBlur = (field: keyof PantryItemOut, value: any) => {
+  const handleBlur = (
+    field: "name" | "capacity_g" | "note",
+    value: string | number | null,
+  ) => {
     if (item[field] !== value && !(item[field] === null && value === "")) {
-      onUpdate({ [field]: value === "" ? null : value });
+      onUpdate({ [field]: value === "" ? null : value } as Partial<PantryItemOut>);
     }
   };
 
-  const timeStr = formatDistanceToNow(new Date(item.updated_at), { addSuffix: true, locale: ko });
+  const timeStr = formatRelativeTime(item.updated_at);
 
   return (
     <tr className="border-b border-hairline hover:bg-surface-soft/50 transition-colors group">

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { formatDistanceToNow } from "date-fns";
-import { ko } from "date-fns/locale";
 import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,8 +13,9 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { formatRelativeTime } from "@/lib/relative-time";
 
-import type { PantryItemOut, PantryKind, PantryRemainingPct, SortField, OrderField } from "@/types/pantry";
+import type { PantryItemOut, PantryKind, PantryRemainingPct, SortField } from "@/types/pantry";
 
 function RemainingSegmentBar({ pct, isCoffee }: { pct: PantryRemainingPct, isCoffee: boolean }) {
   const blocks = pct / 25;
@@ -55,14 +54,13 @@ function KindBadge({ kind }: { kind: PantryKind }) {
 interface PantryCardListProps {
   items: PantryItemOut[];
   sort: SortField;
-  order: OrderField;
   onSortChange: (field: SortField) => void;
   onUpdate: (id: string, updates: Partial<PantryItemOut>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onAdd: (item: { name: string; kind: PantryKind; remaining_pct: PantryRemainingPct; capacity_g: number | null; note: string | null }) => Promise<void>;
 }
 
-export function PantryCardList({ items, sort, order, onSortChange, onUpdate, onDelete, onAdd }: PantryCardListProps) {
+export function PantryCardList({ items, sort, onSortChange, onUpdate, onDelete, onAdd }: PantryCardListProps) {
   const [editingItem, setEditingItem] = useState<PantryItemOut | null>(null);
   const [adding, setAdding] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -158,7 +156,7 @@ export function PantryCardList({ items, sort, order, onSortChange, onUpdate, onD
                 {item.note || "-"}
               </div>
               <div className="text-micro text-sand whitespace-nowrap">
-                {item.updated_by.name} · {formatDistanceToNow(new Date(item.updated_at), { locale: ko })} 전
+                {item.updated_by.name} · {formatRelativeTime(item.updated_at)}
               </div>
             </div>
           </div>

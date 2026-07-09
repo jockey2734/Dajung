@@ -1,5 +1,7 @@
 export type PantryKind = "tea" | "coffee" | "other";
 export type PantryRemainingPct = 0 | 25 | 50 | 75 | 100;
+export type SortField = "updated_at" | "name" | "remaining_pct";
+export type OrderField = "asc" | "desc";
 
 export interface PantryUserOut {
   id: string;

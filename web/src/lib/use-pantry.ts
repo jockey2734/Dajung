@@ -5,11 +5,10 @@ import type {
   PantryItemOut, 
   CoffeeAlertOut, 
   PantryKind, 
-  PantryRemainingPct 
+  PantryRemainingPct,
+  SortField,
+  OrderField,
 } from "@/types/pantry";
-
-export type SortField = "updated_at" | "name" | "remaining_pct";
-export type OrderField = "asc" | "desc";
 
 export function usePantry() {
   const [items, setItems] = useState<PantryItemOut[]>([]);
@@ -75,7 +74,6 @@ export function usePantry() {
       });
       if (!res.ok) throw new Error("Add failed");
       
-      const data = await res.json();
       // Add to state and re-sort by refetching
       await fetchPantry(); 
     } catch (err) {

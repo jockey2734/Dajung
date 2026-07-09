@@ -61,7 +61,6 @@ export function PantryClient() {
         <PantryCardList 
           items={items} 
           sort={sort} 
-          order={order} 
           onSortChange={handleSortChange}
           onUpdate={updateItem}
           onDelete={deleteItem}

@@ -44,7 +44,7 @@ describe("usePantry", () => {
     fetchMock.mockRejectedValueOnce(new Error("Network failure"));
 
     // 3. Trigger update
-    let error: any;
+    let error: unknown;
     await act(async () => {
       try {
         await result.current.updateItem("1", { remaining_pct: 50 });
