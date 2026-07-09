@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     upload_max_file_bytes: int = 20 * 1024 * 1024
     upload_max_files: int = 5
     attachment_max_chars: int = 12000
+    # Weekly user-memory batch input/output bounds (webapp-spec S6).
+    # 주간 사용자 메모리 배치 입력/출력 한계 (webapp-spec S6).
+    memory_input_chars: int = 30000
+    memory_output_chars: int = 1000
+    max_tokens_memory: int = 1000
 
     # --- database ---
     # Dev default only — production URL comes from .env (DAJUNG_DATABASE_URL).

@@ -24,6 +24,7 @@ from api.app.core.deps import SessionDep
 from api.app.core.errors import ApiError
 from api.app.core.lockout import LoginLockout
 from api.app.core.ratelimit import limiter
+from api.app.jobs.memory import create_memory_scheduler
 from api.app.routes import auth, chat, files, pantry, privacy, sessions, uploads
 
 
@@ -34,14 +35,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     서빙 단계 프로세스 리소스를 초기화한다.
     """
     app.state.checkpointer = None
-    if settings.database_url.startswith("postgresql"):
-        checkpoint_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
-        async with AsyncPostgresSaver.from_conn_string(checkpoint_url) as checkpointer:
-            await checkpointer.setup()
-            app.state.checkpointer = checkpointer
+    app.state.memory_scheduler = create_memory_scheduler()
+    app.state.memory_scheduler.start()
+    try:
+        if settings.database_url.startswith("postgresql"):
+            checkpoint_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+            async with AsyncPostgresSaver.from_conn_string(checkpoint_url) as checkpointer:
+                await checkpointer.setup()
+                app.state.checkpointer = checkpointer
+                yield
+        else:
             yield
-    else:
-        yield
+    finally:
+        app.state.memory_scheduler.shutdown(wait=False)
+        app.state.memory_scheduler = None
 
 
 def create_app() -> FastAPI:

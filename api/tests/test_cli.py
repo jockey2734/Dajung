@@ -19,14 +19,14 @@ def test_help_lists_commands() -> None:
         assert command in result.output
 
 
-def test_unimplemented_ask_fails_cleanly() -> None:
-    # Until feat/cx-cli-rag merges, ask must exit 1 with a pointer to the
-    # blocking branch — not a traceback.
-    # feat/cx-cli-rag 머지 전까지 ask는 트레이스백 없이 선행 브랜치를
-    # 알려주며 exit 1 해야 한다.
+def test_ask_without_qdrant_fails_cleanly() -> None:
+    # No live Qdrant in unit tests — ask must exit 1 with a clear message
+    # and must NOT have loaded the heavy embedder first.
+    # 단위 테스트에는 Qdrant가 없다 — ask는 임베더를 올리기 전에
+    # 명확한 메시지와 함께 exit 1 해야 한다.
     result = runner.invoke(app, ["ask", "테스트 질문"])
     assert result.exit_code == 1
-    assert "feat/cx-cli-rag" in result.output
+    assert "Qdrant" in result.output
 
 
 def test_stats_without_qdrant_fails_cleanly() -> None:
