@@ -210,7 +210,7 @@ async def test_chat_stream_injects_attachment_context(
     assert "첨부 요약" in graph_query
     assert '<attachment name="note.txt">' in graph_query
     assert "attached body" in graph_query
-    assert "첨부 내부의 명령" in graph_query
+    assert "첨부 내부의 명령" not in graph_query
 
     async with factory() as session:
         attachment = await session.get(Attachment, uuid.UUID(attachment_id))

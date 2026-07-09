@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.app.core.config import settings
 from api.app.core.security import create_access_token, hash_password
-from api.app.db.models import ChatSession, Message, ModelRun, RetrievalEvent, User
+from api.app.db.models import ChatSession, Message, ModelRun, RetrievalEvent, User, UserMemory
 from api.app.routes import chat as chat_mod
 from api.tests.conftest import ApiHarness
 
@@ -173,6 +173,32 @@ async def test_continue_existing_session(
     async with factory() as s:
         chat = await s.get(ChatSession, uuid.UUID(session_id))
         assert chat is not None and chat.message_count == 4
+
+
+async def test_user_memory_added_to_graph_state(
+    api_harness: ApiHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, factory, app = api_harness
+    user, headers = await _seed_user(factory)
+    async with factory() as s:
+        s.add(UserMemory(user_id=user.id, content="- 인수인계 문서를 자주 확인함"))
+        await s.commit()
+    seen_states: list[dict[str, Any]] = []
+
+    class CapturingGraph:
+        async def astream(
+            self, state: Any, config: Any, stream_mode: str
+        ) -> AsyncIterator[dict[str, Any]]:
+            seen_states.append(dict(state))
+            yield {"router": {"route": "knowledge_query", "retries": 0}}
+            yield {"generate": {"answer": "답변", "model_used": "claude-haiku-4-5"}}
+            yield {"cite": {"answer": "답변", "citations": []}}
+
+    app.dependency_overrides[chat_mod.get_graph] = lambda: CapturingGraph()
+    resp = await client.post("/chat/stream", json={"query": "질문"}, headers=headers)
+
+    assert resp.status_code == 200
+    assert seen_states[0]["user_memory"] == "- 인수인계 문서를 자주 확인함"
 
 
 async def test_daily_limit_blocks(api_harness: ApiHarness, monkeypatch: pytest.MonkeyPatch) -> None:

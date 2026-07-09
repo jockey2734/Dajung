@@ -37,7 +37,7 @@ def generate_handover(state: State) -> dict[str, Any]:
     role_line = f"질문자 직책: {role_hint}\n" if role_hint else ""
     answer = complete(
         model=settings.model_sonnet,
-        system_blocks=answer_system_blocks(),
+        system_blocks=answer_system_blocks(state.get("user_memory")),
         user_text=(
             f"{_FORMAT}\n\n{role_line}질문: {state['query']}\n\n자료:\n{build_context(reranked)}"
         ),

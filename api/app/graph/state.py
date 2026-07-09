@@ -27,6 +27,7 @@ class State(TypedDict, total=False):
     role_hint: str | None
     semester_hint: str | None
     topic_hint: str | None
+    user_memory: str | None
     candidates: list[dict[str, Any]]
     reranked: list[dict[str, Any]]
     retries: int

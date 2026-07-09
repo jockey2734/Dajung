@@ -30,7 +30,7 @@ def generate_node(state: State) -> dict[str, Any]:
     model = pick_model("knowledge", state["query"], len(reranked))
     answer = complete(
         model=model,
-        system_blocks=answer_system_blocks(),
+        system_blocks=answer_system_blocks(state.get("user_memory")),
         user_text=f"질문: {state['query']}\n\n자료:\n{build_context(reranked)}",
         max_tokens=settings.max_tokens_generate,
     )
