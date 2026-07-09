@@ -1,0 +1,29 @@
+{
+	admin off
+
+	# For first certificate tests, uncomment the staging CA to avoid rate limits.
+	# 최초 인증서 검증 시 rate limit 방지를 위해 staging CA를 잠시 켠다.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$PUBLIC_HOST} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Content-Security-Policy "frame-ancestors 'none'"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MiB
+			roll_keep 7
+			roll_keep_for 168h
+		}
+		format json
+	}
+
+	reverse_proxy web:3000
+}

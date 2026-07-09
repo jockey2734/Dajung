@@ -35,6 +35,14 @@ uv run dajung ask "질문"         # cited answer in terminal · 인용 포함 �
 uv run pytest                   # quality gate (external services excluded)
 ```
 
+## Compose Serving · Compose 서빙
+
+```sh
+cp .env.example .env              # fill secrets and PUBLIC_HOST before production
+docker compose config             # validate caddy-only public ports and env wiring
+docker compose up -d --build       # run on the server after docs/SECURITY.md §5.7 gates
+```
+
 ## Notes · 참고
 
 **EN** — Internal design docs and all club data are intentionally not in this repository. Permission filtering is enforced at retrieval time and re-checked in process; the regression suite (`api/tests/test_permission.py`) gates every merge.
