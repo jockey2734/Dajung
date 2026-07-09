@@ -180,3 +180,48 @@
     @apply font-sans;
   }
 }
+
+/* Minimal markdown spacing for assistant messages (message-list.tsx) —
+   no typography plugin installed (S4 names only react-markdown), so
+   Tailwind's preflight reset otherwise collapses all block spacing. */
+.markdown-content > * + * {
+  margin-top: 0.6em;
+}
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.4em;
+}
+.markdown-content ul {
+  list-style: disc;
+}
+.markdown-content ol {
+  list-style: decimal;
+}
+.markdown-content li + li {
+  margin-top: 0.25em;
+}
+.markdown-content strong {
+  font-weight: 600;
+}
+.markdown-content code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-xs);
+  padding: 0.1em 0.35em;
+}
+.markdown-content pre {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: 0.75em;
+  overflow-x: auto;
+}
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+.markdown-content blockquote {
+  border-left: 2px solid var(--color-hairline-strong);
+  padding-left: 0.75em;
+  color: var(--color-mocha);
+}
