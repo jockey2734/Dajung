@@ -1,0 +1,180 @@
+name: dajung
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - frontnet
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: runner
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://api:8000}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    expose:
+      - "3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - frontnet
+      - backnet
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DAJUNG_DATABASE_URL: postgresql+asyncpg://${DAJUNG_POSTGRES_USER:-dajung}:${DAJUNG_POSTGRES_PASSWORD}@postgres:5432/${DAJUNG_POSTGRES_DB:-dajung}
+      DAJUNG_QDRANT_URL: ${DAJUNG_QDRANT_URL:-http://qdrant:6333}
+      DAJUNG_QDRANT_API_KEY: ${DAJUNG_QDRANT_API_KEY:-}
+      DAJUNG_OLLAMA_BASE_URL: ${DAJUNG_OLLAMA_BASE_URL:-http://ollama:11434}
+      DAJUNG_JWT_SECRET: ${DAJUNG_JWT_SECRET}
+      DAJUNG_ANTHROPIC_API_KEY: ${DAJUNG_ANTHROPIC_API_KEY:-}
+      DAJUNG_COLLECTION: ${DAJUNG_COLLECTION:-dajung}
+      DAJUNG_UPLOAD_DIR: ${DAJUNG_UPLOAD_DIR:-data/uploads}
+      DAJUNG_MODEL_HAIKU: ${DAJUNG_MODEL_HAIKU:-claude-haiku-4-5}
+      DAJUNG_MODEL_SONNET: ${DAJUNG_MODEL_SONNET:-claude-sonnet-5}
+      DAJUNG_MODEL_OPUS: ${DAJUNG_MODEL_OPUS:-claude-opus-4-8}
+      DAJUNG_ROUTER_MODEL: ${DAJUNG_ROUTER_MODEL:-gemma4:e4b}
+      DAJUNG_DAILY_CHAT_LIMIT: ${DAJUNG_DAILY_CHAT_LIMIT:-20}
+      DAJUNG_SSE_CHUNK_CHARS: ${DAJUNG_SSE_CHUNK_CHARS:-60}
+      DAJUNG_HEALTH_PROBE_TIMEOUT_S: ${DAJUNG_HEALTH_PROBE_TIMEOUT_S:-2.0}
+      DAJUNG_UPLOAD_MAX_FILE_BYTES: ${DAJUNG_UPLOAD_MAX_FILE_BYTES:-20971520}
+      DAJUNG_UPLOAD_MAX_FILES: ${DAJUNG_UPLOAD_MAX_FILES:-5}
+      DAJUNG_ATTACHMENT_MAX_CHARS: ${DAJUNG_ATTACHMENT_MAX_CHARS:-12000}
+      DAJUNG_MEMORY_INPUT_CHARS: ${DAJUNG_MEMORY_INPUT_CHARS:-30000}
+      DAJUNG_MEMORY_OUTPUT_CHARS: ${DAJUNG_MEMORY_OUTPUT_CHARS:-1000}
+      DAJUNG_MAX_TOKENS_MEMORY: ${DAJUNG_MAX_TOKENS_MEMORY:-1000}
+      DAJUNG_RETRIEVE_LIMIT: ${DAJUNG_RETRIEVE_LIMIT:-20}
+      DAJUNG_RERANK_TOP_K: ${DAJUNG_RERANK_TOP_K:-5}
+      DAJUNG_RERANK_THRESHOLD: ${DAJUNG_RERANK_THRESHOLD:-0.5}
+      DAJUNG_MAX_RETRIES: ${DAJUNG_MAX_RETRIES:-2}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - backnet
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import json,urllib.request,sys; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)); sys.exit(0 if data.get('status') == 'ok' else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DAJUNG_POSTGRES_DB:-dajung}
+      POSTGRES_USER: ${DAJUNG_POSTGRES_USER:-dajung}
+      POSTGRES_PASSWORD: ${DAJUNG_POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    networks:
+      - backnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    expose:
+      - "6333"
+    networks:
+      - backnet
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:6333/readyz >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    expose:
+      - "11434"
+    networks:
+      - backnet
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  frontnet:
+  backnet:
+
+volumes:
+  pgdata:
+  qdrant_data:
+  ollama_models:
+  caddy_data:
+  caddy_config:
+  caddy_logs:
