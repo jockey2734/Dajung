@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Paperclip, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ export function ChatComposer({
   remaining,
   disabled,
   onSend,
+  prefill,
 }: {
   attachments: AttachmentChip[];
   onAttach: (files: FileList) => void;
@@ -24,9 +25,20 @@ export function ChatComposer({
   remaining: number;
   disabled?: boolean;
   onSend: (text: string) => void;
+  // webapp-spec S12: example-card click fills the composer + focuses it
+  // without sending. A fresh object reference per pick (even for repeated
+  // text) is what re-triggers the effect below.
+  prefill?: { text: string } | null;
 }) {
   const [value, setValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setValue(prefill.text);
+    textareaRef.current?.focus();
+  }, [prefill]);
 
   function handleSend() {
     const text = value.trim();
@@ -91,6 +103,7 @@ export function ChatComposer({
           <Paperclip className="size-4" />
         </Button>
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={handleKeyDown}

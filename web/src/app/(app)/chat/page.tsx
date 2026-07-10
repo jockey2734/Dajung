@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { SessionSidebar } from "@/components/chat/session-sidebar";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatComposer } from "@/components/chat/chat-composer";
+import { ChatEmptyState } from "@/components/chat/chat-empty-state";
 import { useChatStream } from "@/lib/use-chat-stream";
 
 export default function ChatPage() {
@@ -25,6 +26,7 @@ export default function ChatPage() {
   } = useChatStream();
 
   const [isDragging, setIsDragging] = useState(false);
+  const [prefill, setPrefill] = useState<{ text: string } | null>(null);
   const dragDepth = useRef(0);
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
 
@@ -74,12 +76,10 @@ export default function ChatPage() {
         )}
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-taupe">
-              <span aria-hidden className="text-[48px] leading-none">
-                🍵
-              </span>
-              <p className="text-body">다정 AI에게 지식·인수인계·찻장 관련 질문을 해보세요.</p>
-            </div>
+            <ChatEmptyState
+              show={messages.length === 0 && !isStreaming}
+              onPickExample={(text) => setPrefill({ text })}
+            />
           ) : (
             <MessageList messages={messages} ragLabel={ragLabel} onRetry={retry} />
           )}
@@ -92,6 +92,7 @@ export default function ChatPage() {
           remaining={remaining}
           disabled={isStreaming}
           onSend={sendMessage}
+          prefill={prefill}
         />
       </div>
     </div>
