@@ -135,9 +135,9 @@ async def update_pantry_item(
         item.kind = req.kind
     if req.remaining_pct is not None:
         item.remaining_pct = req.remaining_pct
-    if req.capacity_g is not None:
+    if "capacity_g" in req.model_fields_set:
         item.capacity_g = req.capacity_g
-    if req.note is not None:
+    if "note" in req.model_fields_set:
         item.note = req.note
 
     item.updated_by = current_user.id
