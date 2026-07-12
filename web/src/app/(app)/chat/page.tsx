@@ -23,6 +23,7 @@ export default function ChatPage() {
     removeAttachment,
     sendMessage,
     retry,
+    setFeedback,
   } = useChatStream();
 
   const [isDragging, setIsDragging] = useState(false);
@@ -81,7 +82,7 @@ export default function ChatPage() {
               onPickExample={(text) => setPrefill({ text })}
             />
           ) : (
-            <MessageList messages={messages} ragLabel={ragLabel} onRetry={retry} />
+            <MessageList messages={messages} ragLabel={ragLabel} onRetry={retry} onFeedback={setFeedback} />
           )}
           <div ref={scrollAnchorRef} />
         </div>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readChatSSEStream } from "@/lib/sse-parser";
 import type { AttachmentChip, ChatMessage, Citation, SessionSummary } from "@/lib/chat-types";
+import { isPersistedMessageId } from "@/lib/chat-types";
 
 // Initial display before the first server `done.remaining` arrives.
 // 첫 서버 `done.remaining` 값이 오기 전 초기 표시값.
@@ -27,7 +28,20 @@ interface SessionDetailApiResponse {
     content: string;
     metadata: { route?: string; citations?: Citation[] };
     created_at: string;
+    my_feedback: -1 | 1 | null;
   }>;
+}
+
+function mapSessionMessages(messages: SessionDetailApiResponse["messages"]): ChatMessage[] {
+  return messages.map((m) => ({
+    id: m.id,
+    role: m.role === "user" ? "user" : "assistant",
+    content: m.content,
+    status: "done",
+    route: m.metadata.route,
+    citations: m.metadata.citations,
+    myFeedback: m.my_feedback,
+  }));
 }
 
 interface UploadApiResponse {
@@ -80,17 +94,31 @@ export function useChatStream() {
     if (!res.ok) return;
     const body = (await res.json()) as SessionDetailApiResponse;
     setActiveSessionId(body.id);
-    setMessages(
-      body.messages.map((m) => ({
-        id: m.id,
-        role: m.role === "user" ? "user" : "assistant",
-        content: m.content,
-        status: "done",
-        route: m.metadata.route,
-        citations: m.metadata.citations,
-      })),
-    );
+    setMessages(mapSessionMessages(body.messages));
     setAttachments([]);
+  }, []);
+
+  // Fires after a stream's `done` event. The just-finished turn's messages
+  // still carry client-only turn ids (nextTurnId) — this swaps the whole
+  // list for the DB-backed rows (real ids, `my_feedback`) so feedback
+  // buttons have something to PUT/DELETE against. Guarded by session id so a
+  // user who already switched sessions before this resolves doesn't have
+  // their new session's messages clobbered by a stale response.
+  // 스트림 `done` 이벤트 후 실행된다. 방금 끝난 턴의 메시지는 아직 클라이언트
+  // 전용 턴 id(nextTurnId)를 가지므로, DB 기반 행(실제 id·`my_feedback`)으로
+  // 전체 목록을 교체해 피드백 버튼이 PUT/DELETE할 대상을 갖게 한다. 이 응답이
+  // 오기 전에 사용자가 다른 세션으로 이동했다면 그 새 세션의 메시지를 stale
+  // 응답이 덮어쓰지 않도록 세션 id로 가드한다.
+  const refreshMessages = useCallback(async (sessionId: string) => {
+    const res = await fetch(`/api/sessions/${sessionId}`);
+    if (!res.ok) return;
+    const body = (await res.json()) as SessionDetailApiResponse;
+    if (activeSessionIdRef.current !== sessionId) return;
+    setMessages(mapSessionMessages(body.messages));
+  }, []);
+
+  const patchMessageById = useCallback((id: string, patch: Partial<ChatMessage>) => {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   }, []);
 
   const deleteSession = useCallback(
@@ -156,6 +184,15 @@ export function useChatStream() {
           switch (event.type) {
             case "session":
               setActiveSessionId(event.session_id);
+              // The `done` handler below reads this ref, and both events can
+              // land in the same synchronous SSE-processing tick — mutate it
+              // directly so a brand-new chat's first refreshMessages() guard
+              // check isn't comparing against a stale (pre-render) null.
+              // 아래 `done` 핸들러가 이 ref를 읽는데, 두 이벤트가 같은 동기
+              // SSE 처리 틱 안에 올 수 있다 — 새 채팅 첫 턴의 refreshMessages()
+              // 가드 체크가 (리렌더 전) stale한 null과 비교하지 않도록 직접
+              // mutate한다.
+              activeSessionIdRef.current = event.session_id;
               break;
             case "status":
               setRagLabel(event.label);
@@ -175,6 +212,7 @@ export function useChatStream() {
               patchAssistant({ status: "done" });
               setRemaining(event.remaining);
               void loadSessions();
+              void refreshMessages(event.session_id);
               break;
             case "error":
               patchAssistant({ status: "error", errorMessage: event.error.message });
@@ -191,7 +229,7 @@ export function useChatStream() {
         setIsStreaming(false);
       }
     },
-    [loadSessions],
+    [loadSessions, refreshMessages],
   );
 
   // Attachments already linked to the failed user message can't be reused
@@ -219,6 +257,36 @@ export function useChatStream() {
     [attachments, sendMessage],
   );
 
+  // Same-button re-click clears the vote (DELETE); the other button swaps it
+  // (PUT upsert, S13 handles the overwrite). Optimistic + rollback, same
+  // shape as usePantry's updateItem (webapp-spec S14 "S5 pattern").
+  // 같은 버튼 재클릭은 투표 취소(DELETE), 반대 버튼은 교체(PUT upsert, S13가
+  // 덮어쓰기 처리). 낙관적 업데이트+롤백, usePantry의 updateItem과 동일한
+  // 형태(webapp-spec S14 "S5 pattern").
+  const setFeedback = useCallback(
+    async (messageId: string, rating: -1 | 1) => {
+      if (!isPersistedMessageId(messageId)) return;
+      const previous = messages.find((m) => m.id === messageId)?.myFeedback ?? null;
+      const next = previous === rating ? null : rating;
+      patchMessageById(messageId, { myFeedback: next });
+
+      try {
+        const res =
+          next === null
+            ? await fetch(`/api/messages/${messageId}/feedback`, { method: "DELETE" })
+            : await fetch(`/api/messages/${messageId}/feedback`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rating: next }),
+              });
+        if (!res.ok) throw new Error("feedback update failed");
+      } catch {
+        patchMessageById(messageId, { myFeedback: previous });
+      }
+    },
+    [messages, patchMessageById],
+  );
+
   return {
     sessions,
     activeSessionId,
@@ -234,5 +302,6 @@ export function useChatStream() {
     removeAttachment,
     sendMessage: sendWithAttachments,
     retry,
+    setFeedback,
   };
 }
