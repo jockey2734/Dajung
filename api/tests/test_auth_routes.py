@@ -15,9 +15,10 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from api.app.core.account_term import ACCOUNT_TERM_MONTHS, add_months, to_utc
 from api.app.core.config import settings
 from api.app.core.ratelimit import limiter
-from api.app.core.security import hash_invitation_code, hash_password
+from api.app.core.security import create_access_token, hash_invitation_code, hash_password
 from api.app.db.base import Base, get_session
 from api.app.db.models import InvitationCode, User
 from api.app.main import create_app
@@ -76,6 +77,7 @@ async def _seed_user(
     password: str = "correct-password",
     status: str = "active",
     role: str = "staff",
+    expires_at: datetime | None = None,
 ) -> User:
     async with factory() as session:
         user = User(
@@ -85,6 +87,7 @@ async def _seed_user(
             role=role,
             status=status,
             profile={},
+            expires_at=expires_at,
         )
         session.add(user)
         await session.commit()
@@ -94,7 +97,7 @@ async def _seed_user(
 def _signup_body(**overrides: Any) -> dict[str, Any]:
     body: dict[str, Any] = {
         "email": "new@example.com",
-        "password": "long-enough-pw",
+        "password": "long-enough-pw",  # pragma: allowlist secret
         "name": "새 운영진",
         "invitation_code": GOOD_CODE,
     }
@@ -115,6 +118,9 @@ class TestSignup:
         async with factory() as session:
             user = await session.get(User, user_id)
             assert user is not None and user.role == "staff"
+            assert user.expires_at is not None
+            expected = add_months(datetime.now(UTC), ACCOUNT_TERM_MONTHS)
+            assert abs((to_utc(user.expires_at) - expected).total_seconds()) < 5
             codes = (await session.execute(InvitationCode.__table__.select())).all()
             assert codes[0].used_at is not None
             assert codes[0].used_by == user_id
@@ -163,7 +169,10 @@ class TestSignin:
         await _seed_user(factory)
         response = await client.post(
             "/auth/signin",
-            json={"email": "unha@example.com", "password": "correct-password"},
+            json={
+                "email": "unha@example.com",
+                "password": "correct-password",  # pragma: allowlist secret
+            },
         )
         assert response.status_code == 200
         payload = response.json()
@@ -176,7 +185,8 @@ class TestSignin:
         client, factory, _ = harness
         await _seed_user(factory)
         response = await client.post(
-            "/auth/signin", json={"email": "unha@example.com", "password": "nope"}
+            "/auth/signin",
+            json={"email": "unha@example.com", "password": "nope"},  # pragma: allowlist secret
         )
         assert response.status_code == 401
         assert response.json()["error"]["code"] == "bad_credentials"
@@ -188,9 +198,49 @@ class TestSignin:
         await _seed_user(factory, status="suspended")
         response = await client.post(
             "/auth/signin",
-            json={"email": "unha@example.com", "password": "correct-password"},
+            json={
+                "email": "unha@example.com",
+                "password": "correct-password",  # pragma: allowlist secret
+            },
         )
         assert response.status_code == 401
+
+    async def test_expired_user_gets_explicit_error(
+        self, harness: tuple[AsyncClient, async_sessionmaker[AsyncSession], FastAPI]
+    ) -> None:
+        client, factory, _ = harness
+        await _seed_user(factory, expires_at=datetime.now(UTC) - timedelta(days=1))
+
+        response = await client.post(
+            "/auth/signin",
+            json={
+                "email": "unha@example.com",
+                "password": "correct-password",  # pragma: allowlist secret
+            },
+        )
+
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "account_expired"
+
+    async def test_owner_ignores_account_expiry(
+        self, harness: tuple[AsyncClient, async_sessionmaker[AsyncSession], FastAPI]
+    ) -> None:
+        client, factory, _ = harness
+        await _seed_user(
+            factory,
+            role="owner",
+            expires_at=datetime.now(UTC) - timedelta(days=1),
+        )
+
+        response = await client.post(
+            "/auth/signin",
+            json={
+                "email": "unha@example.com",
+                "password": "correct-password",  # pragma: allowlist secret
+            },
+        )
+
+        assert response.status_code == 200
 
     async def test_lockout_after_five_failures(
         self, harness: tuple[AsyncClient, async_sessionmaker[AsyncSession], FastAPI]
@@ -199,14 +249,21 @@ class TestSignin:
         await _seed_user(factory)
         for _ in range(5):
             bad = await client.post(
-                "/auth/signin", json={"email": "unha@example.com", "password": "nope"}
+                "/auth/signin",
+                json={
+                    "email": "unha@example.com",
+                    "password": "nope",  # pragma: allowlist secret
+                },
             )
             assert bad.status_code == 401
         # Correct password no longer helps — the email is locked (SECURITY.md §3).
         # 올바른 비밀번호여도 소용없다 — 이메일이 잠겼다 (SECURITY.md §3).
         locked = await client.post(
             "/auth/signin",
-            json={"email": "unha@example.com", "password": "correct-password"},
+            json={
+                "email": "unha@example.com",
+                "password": "correct-password",  # pragma: allowlist secret
+            },
         )
         assert locked.status_code == 429
         assert locked.json()["error"]["code"] == "locked_out"
@@ -220,12 +277,35 @@ class TestMe:
         await _seed_user(factory)
         signin = await client.post(
             "/auth/signin",
-            json={"email": "unha@example.com", "password": "correct-password"},
+            json={
+                "email": "unha@example.com",
+                "password": "correct-password",  # pragma: allowlist secret
+            },
         )
         token = signin.json()["access_token"]
         response = await client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 200
         assert response.json()["email"] == "unha@example.com"
+
+    async def test_expired_token_recovers_after_extension(
+        self, harness: tuple[AsyncClient, async_sessionmaker[AsyncSession], FastAPI]
+    ) -> None:
+        client, factory, _ = harness
+        user = await _seed_user(factory, expires_at=datetime.now(UTC) - timedelta(days=1))
+        token = create_access_token(user.id, user.email, user.role)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        expired = await client.get("/auth/me", headers=headers)
+        assert expired.status_code == 401
+        assert expired.json()["error"]["code"] == "account_expired"
+
+        async with factory() as session:
+            stored = await session.get(User, user.id)
+            assert stored is not None
+            stored.expires_at = datetime.now(UTC) + timedelta(days=1)
+            await session.commit()
+
+        assert (await client.get("/auth/me", headers=headers)).status_code == 200
 
     async def test_me_without_token_rejected(
         self, harness: tuple[AsyncClient, async_sessionmaker[AsyncSession], FastAPI]
@@ -253,10 +333,18 @@ class TestRateLimitAndHealth:
         monkeypatch.setattr(settings, "rate_limit_ip", "3/minute")
         for _ in range(3):
             await client.post(
-                "/auth/signin", json={"email": "x@example.com", "password": "whatever"}
+                "/auth/signin",
+                json={
+                    "email": "x@example.com",
+                    "password": "whatever",  # pragma: allowlist secret
+                },
             )
         blocked = await client.post(
-            "/auth/signin", json={"email": "x@example.com", "password": "whatever"}
+            "/auth/signin",
+            json={
+                "email": "x@example.com",
+                "password": "whatever",  # pragma: allowlist secret
+            },
         )
         assert blocked.status_code == 429
         assert blocked.json()["error"]["code"] == "rate_limited"

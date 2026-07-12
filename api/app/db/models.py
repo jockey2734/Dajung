@@ -27,6 +27,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -46,8 +47,15 @@ class User(Base):
 
     __tablename__ = "users"
     __table_args__ = (
-        CheckConstraint("role IN ('owner', 'staff')", name="ck_users_role"),
+        CheckConstraint("role IN ('owner', 'president', 'staff')", name="ck_users_role"),
         CheckConstraint("status IN ('active', 'suspended', 'deleted')", name="ck_users_status"),
+        Index(
+            "uq_users_single_president",
+            "role",
+            unique=True,
+            postgresql_where=text("role = 'president'"),
+            sqlite_where=text("role = 'president'"),
+        ),
     )
 
     # Client-side uuid4 — works on SQLite too; migration adds gen_random_uuid() as belt.
@@ -62,11 +70,58 @@ class User(Base):
     title: Mapped[str | None] = mapped_column(String(50))
     status: Mapped[str] = mapped_column(String(10), default="active")
     profile: Mapped[dict[str, Any]] = mapped_column(PortableJSON, default=dict)
+    # NULL is reserved for the owner, whose account has no operational term.
+    # NULL은 운영 임기가 없는 owner에게만 사용한다.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class PresidentTransfer(Base):
+    """Permanent audit record for president appointments and transfers.
+
+    회장 최초 임명·권한 이양을 영구 보존하는 감사 기록.
+    """
+
+    __tablename__ = "president_transfers"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
+    from_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    to_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class StaffSemester(Base):
+    """Named executive roster row for one academic semester.
+
+    한 학기 집행부 명단의 이름 기반 행.
+    """
+
+    __tablename__ = "staff_semesters"
+    __table_args__ = (
+        UniqueConstraint("semester", "member_name", name="uq_staff_semesters_semester_member"),
+        CheckConstraint(
+            "semester ~ '^[0-9]{4}-[12]$'",
+            name="ck_staff_semesters_semester_postgresql",
+        ).ddl_if(dialect="postgresql"),
+        CheckConstraint(
+            "length(semester) = 6 AND semester GLOB '[0-9][0-9][0-9][0-9]-[12]'",
+            name="ck_staff_semesters_semester_sqlite",
+        ).ddl_if(dialect="sqlite"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=uuid.uuid4)
+    semester: Mapped[str] = mapped_column(String(7))
+    department: Mapped[str] = mapped_column(String(30))
+    member_name: Mapped[str] = mapped_column(String(100))
+    position: Mapped[str | None] = mapped_column(String(30))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ChatSession(Base):

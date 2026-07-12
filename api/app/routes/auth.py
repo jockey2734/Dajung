@@ -11,6 +11,13 @@ from functools import lru_cache
 from fastapi import APIRouter, Request
 from sqlalchemy import select
 
+from api.app.core.account_term import (
+    ACCOUNT_EXPIRED_MESSAGE,
+    ACCOUNT_TERM_MONTHS,
+    add_months,
+    is_account_expired,
+    to_utc,
+)
 from api.app.core.deps import CurrentUser, SessionDep
 from api.app.core.errors import ApiError
 from api.app.core.lockout import LoginLockout
@@ -44,14 +51,6 @@ def _dummy_hash() -> str:
     return hash_password("dajung-dummy-password")
 
 
-def _as_utc(moment: datetime) -> datetime:
-    """Normalize DB datetimes — SQLite returns naive, Postgres aware.
-
-    DB datetime 정규화 — SQLite는 naive, Postgres는 aware를 돌려준다.
-    """
-    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
-
-
 @router.post("/signup", status_code=201)
 @limiter.limit(ip_limit)
 async def signup(request: Request, body: SignupRequest, session: SessionDep) -> SignupResponse:
@@ -60,11 +59,7 @@ async def signup(request: Request, body: SignupRequest, session: SessionDep) -> 
     invitation = (
         await session.execute(select(InvitationCode).where(InvitationCode.code_hash == code_hash))
     ).scalar_one_or_none()
-    if (
-        invitation is None
-        or invitation.used_at is not None
-        or _as_utc(invitation.expires_at) <= now
-    ):
+    if invitation is None or invitation.used_at is not None or to_utc(invitation.expires_at) <= now:
         raise ApiError(400, "invalid_code", "유효하지 않은 통과번호입니다.")
 
     email = body.email.lower()
@@ -80,6 +75,7 @@ async def signup(request: Request, body: SignupRequest, session: SessionDep) -> 
         name=body.name,
         role="staff",
         status="active",
+        expires_at=add_months(now, ACCOUNT_TERM_MONTHS),
         profile={},
     )
     session.add(user)
@@ -111,6 +107,8 @@ async def signin(request: Request, body: SigninRequest, session: SessionDep) -> 
     if user is None or user.status != "active" or not password_ok:
         lockout.record_failure(email)
         raise ApiError(401, "bad_credentials", "이메일 또는 비밀번호가 올바르지 않습니다.")
+    if is_account_expired(user.role, user.expires_at):
+        raise ApiError(401, "account_expired", ACCOUNT_EXPIRED_MESSAGE)
 
     lockout.clear(email)
     user.last_seen_at = datetime.now(UTC)

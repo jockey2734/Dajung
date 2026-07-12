@@ -1,9 +1,9 @@
 """Dajung Ark CLI — MVP1 entry point (Dajung.md §8.2).
 
 Dajung Ark CLI — MVP1 진입점 (Dajung.md §8.2).
-Commands: ingest / ask / stats / invite. Heavy modules are imported lazily so the
+Commands: ingest / ask / stats / invite / president. Heavy modules are imported lazily so the
 CLI stays responsive and later branches can fill in the implementations.
-명령: ingest / ask / stats / invite. 무거운 모듈은 지연 임포트한다 — CLI 반응성을
+명령: ingest / ask / stats / invite / president. 무거운 모듈은 지연 임포트한다 — CLI 반응성을
 지키고, 이후 브랜치가 구현을 채워 넣을 수 있게 한다.
 """
 
@@ -14,10 +14,12 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.app.core.config import settings
 from api.app.core.logging import configure_logging
+from api.app.db.models import User
 from api.app.invitations import (
     CreatedInvitation,
     InvitationPrefixAmbiguousError,
@@ -27,10 +29,19 @@ from api.app.invitations import (
     list_invitations,
     revoke_invitation,
 )
+from api.app.presidents import (
+    PresidentTransferSummary,
+    PresidentTransferValidationError,
+    get_current_president,
+    list_president_transfers,
+    transfer_president,
+)
 
 app = typer.Typer(name="dajung", no_args_is_help=True, add_completion=False)
 invite_app = typer.Typer(no_args_is_help=True, add_completion=False)
+president_app = typer.Typer(no_args_is_help=True, add_completion=False)
 app.add_typer(invite_app, name="invite", help="통과번호 관리")
+app.add_typer(president_app, name="president", help="회장 권한 관리")
 
 # Default CLI identity until serving-phase auth exists (Dajung.md §8.8).
 # 서빙 단계 인증이 생기기 전까지의 CLI 기본 신원 (Dajung.md §8.8).
@@ -66,6 +77,49 @@ async def _revoke_code(prefix: str) -> InvitationSummary:
     factory = _session_factory()
     async with factory() as session:
         return await revoke_invitation(session, prefix)
+
+
+class PresidentCliError(Exception):
+    """Expected president-command failure rendered without a traceback.
+
+    트레이스백 없이 표시할 회장 관리 명령의 예상 오류.
+    """
+
+
+async def _cli_owner(session: AsyncSession) -> User:
+    owners = (await session.execute(select(User).where(User.role == "owner"))).scalars().all()
+    if len(owners) != 1:
+        raise PresidentCliError("owner 계정이 정확히 하나여야 합니다.")
+    return owners[0]
+
+
+async def _set_president(email: str, note: str | None) -> User:
+    factory = _session_factory()
+    async with factory() as session:
+        owner = await _cli_owner(session)
+        target = (
+            await session.execute(select(User).where(User.email == email.strip().lower()))
+        ).scalar_one_or_none()
+        if target is None:
+            raise PresidentCliError(f"사용자를 찾을 수 없습니다: {email}")
+        try:
+            return await transfer_president(session, actor=owner, to_user_id=target.id, note=note)
+        except PresidentTransferValidationError as exc:
+            raise PresidentCliError(str(exc)) from exc
+
+
+async def _show_president() -> User | None:
+    factory = _session_factory()
+    async with factory() as session:
+        await _cli_owner(session)
+        return await get_current_president(session)
+
+
+async def _president_history() -> list[PresidentTransferSummary]:
+    factory = _session_factory()
+    async with factory() as session:
+        await _cli_owner(session)
+        return await list_president_transfers(session)
 
 
 @invite_app.command("create")
@@ -122,6 +176,62 @@ def invite_revoke(
         typer.echo(f"ID prefix가 모호합니다: {id_prefix}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"폐기 완료: {str(revoked.id)[:8]}")
+
+
+@president_app.command("set")
+def president_set(
+    email: Annotated[str, typer.Argument(help="후임자 이메일")],
+    note: Annotated[str | None, typer.Option("--note", help="인계 메모")] = None,
+) -> None:
+    """Appoint an active staff account as president.
+
+    활성 운영진 계정을 회장으로 임명한다.
+    """
+    try:
+        president = asyncio.run(_set_president(email, note))
+    except PresidentCliError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"회장 임명 완료: {president.name} <{president.email}>")
+
+
+@president_app.command("show")
+def president_show() -> None:
+    """Show the current president.
+
+    현재 회장을 표시한다.
+    """
+    try:
+        president = asyncio.run(_show_president())
+    except PresidentCliError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    if president is None:
+        typer.echo("현재 회장: (없음)")
+        return
+    typer.echo(f"현재 회장: {president.name} <{president.email}>")
+
+
+@president_app.command("history")
+def president_history() -> None:
+    """Show permanent president transfer history newest first.
+
+    영구 회장 인계 기록을 최신순으로 표시한다.
+    """
+    try:
+        rows = asyncio.run(_president_history())
+    except PresidentCliError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    if not rows:
+        typer.echo("회장 인계 기록: (없음)")
+        return
+    for row in rows:
+        previous = row.from_user.name if row.from_user is not None else "(없음)"
+        typer.echo(
+            f"{row.transfer.created_at.isoformat()} | {previous} -> {row.to_user.name} | "
+            f"처리: {row.actor.name} | 메모: {row.transfer.note or '-'}"
+        )
 
 
 @app.command()
