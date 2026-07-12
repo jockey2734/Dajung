@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 // DESIGN.md `empty-state` (line 667) + `card-route-*` (line 601): chat's
@@ -31,9 +32,11 @@ export function ChatEmptyState({
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 rounded-lg bg-cream px-6 py-10 text-center">
-      <span aria-hidden className="text-[48px] leading-none">
-        🍵
-      </span>
+      {/* unoptimized — see top-bar.tsx: no sharp in the standalone image, and
+          this fixed-size source needs no transform. */}
+      {/* unoptimized — top-bar.tsx 참고: standalone 이미지에 sharp 없고, 고정
+          크기 원본이라 변환이 불필요. */}
+      <Image src="/icons/mascot-192.png" alt="다정 마스코트" width={48} height={48} unoptimized />
       <p className="text-body text-taupe">다정 AI에게 지식·인수인계·찻장 관련 질문을 해보세요.</p>
       <div className="grid w-full max-w-2xl gap-3 sm:grid-cols-3">
         {EXAMPLES.map((example) => {

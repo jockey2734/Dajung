@@ -8,6 +8,12 @@ afterEach(() => {
 });
 
 describe("ChatEmptyState (webapp-spec S12)", () => {
+  it("renders the real mascot image, not the placeholder emoji (webapp-spec S17)", () => {
+    render(<ChatEmptyState show onPickExample={vi.fn()} />);
+    const mascot = screen.getByAltText("다정 마스코트");
+    expect(mascot.tagName).toBe("IMG");
+  });
+
   it("renders 3 example cards when show is true", () => {
     render(<ChatEmptyState show onPickExample={vi.fn()} />);
     expect(screen.getByText("에스프레소 그라인더 청소는 얼마나 자주 해요?")).toBeInTheDocument();

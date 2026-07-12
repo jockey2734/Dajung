@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatRelativeTime } from "@/lib/relative-time";
 
-import type { PantryItemOut, PantryKind, PantryRemainingPct, SortField } from "@/types/pantry";
+import type { OrderField, PantryItemOut, PantryKind, PantryRemainingPct, SortField } from "@/types/pantry";
 
 function RemainingSegmentBar({ pct, isCoffee }: { pct: PantryRemainingPct, isCoffee: boolean }) {
   const blocks = pct / 25;
@@ -54,13 +54,14 @@ function KindBadge({ kind }: { kind: PantryKind }) {
 interface PantryCardListProps {
   items: PantryItemOut[];
   sort: SortField;
+  order: OrderField;
   onSortChange: (field: SortField) => void;
   onUpdate: (id: string, updates: Partial<PantryItemOut>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onAdd: (item: { name: string; kind: PantryKind; remaining_pct: PantryRemainingPct; capacity_g: number | null; note: string | null }) => Promise<void>;
 }
 
-export function PantryCardList({ items, sort, onSortChange, onUpdate, onDelete, onAdd }: PantryCardListProps) {
+export function PantryCardList({ items, sort, order, onSortChange, onUpdate, onDelete, onAdd }: PantryCardListProps) {
   const [editingItem, setEditingItem] = useState<PantryItemOut | null>(null);
   const [adding, setAdding] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -119,15 +120,27 @@ export function PantryCardList({ items, sort, onSortChange, onUpdate, onDelete, 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-between items-center px-1">
-        <select 
-          value={sort}
-          onChange={(e) => onSortChange(e.target.value as SortField)}
-          className="bg-transparent text-sm text-taupe font-medium outline-none"
-        >
-          <option value="updated_at">최근수정순</option>
-          <option value="name">이름순</option>
-          <option value="remaining_pct">잔량순</option>
-        </select>
+        <div className="flex items-center gap-1">
+          <select
+            value={sort}
+            onChange={(e) => onSortChange(e.target.value as SortField)}
+            className="bg-transparent text-sm text-taupe font-medium outline-none"
+          >
+            <option value="updated_at">최근수정순</option>
+            <option value="name">이름순</option>
+            <option value="remaining_pct">잔량순</option>
+          </select>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={order === "asc" ? "오름차순 — 클릭해 내림차순으로" : "내림차순 — 클릭해 오름차순으로"}
+            onClick={() => onSortChange(sort)}
+            className="text-taupe"
+          >
+            {order === "asc" ? <ArrowUpIcon className="size-4" /> : <ArrowDownIcon className="size-4" />}
+          </Button>
+        </div>
         <Button size="sm" onClick={openAdd} className="bg-espresso text-cream hover:bg-espresso/90">
           + 추가
         </Button>
