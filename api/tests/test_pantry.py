@@ -5,10 +5,13 @@
 
 from __future__ import annotations
 
+import uuid
+
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.app.core.security import create_access_token, hash_password
-from api.app.db.models import User
+from api.app.db.models import PantryItem, User
 from api.tests.conftest import ApiHarness
 
 
@@ -30,6 +33,30 @@ async def _headers_and_user(
     return {"Authorization": f"Bearer {create_access_token(user.id, user.email, user.role)}"}, str(
         user.id
     )
+
+
+async def _create_coffee(
+    client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    name: str = "Test Coffee",
+    capacity_g: int = 1000,
+    remaining_pct: int = 50,
+    note: str = "Test note",
+) -> str:
+    response = await client.post(
+        "/pantry",
+        json={
+            "name": name,
+            "kind": "coffee",
+            "remaining_pct": remaining_pct,
+            "capacity_g": capacity_g,
+            "note": note,
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201
+    return str(response.json()["item"]["id"])
 
 
 async def test_pantry_crud_round_trip(api_harness: ApiHarness) -> None:
@@ -174,6 +201,77 @@ async def test_pantry_rejects_invalid_sort_and_order(api_harness: ApiHarness) ->
 
     assert (await client.get("/pantry?sort=bad", headers=headers)).status_code == 422
     assert (await client.get("/pantry?order=bad", headers=headers)).status_code == 422
+
+
+async def test_patch_explicit_null_clears_capacity(api_harness: ApiHarness) -> None:
+    client, factory, _ = api_harness
+    headers, _ = await _headers_and_user(factory)
+    item_id = await _create_coffee(client, headers)
+
+    response = await client.patch(f"/pantry/{item_id}", json={"capacity_g": None}, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["item"]["capacity_g"] is None
+    assert response.json()["item"]["estimated_g"] is None
+    async with factory() as session:
+        item = await session.get(PantryItem, uuid.UUID(item_id))
+    assert item is not None
+    assert item.capacity_g is None
+
+
+async def test_patch_omitted_capacity_preserves_value(api_harness: ApiHarness) -> None:
+    client, factory, _ = api_harness
+    headers, _ = await _headers_and_user(factory)
+    item_id = await _create_coffee(client, headers, capacity_g=800)
+
+    response = await client.patch(
+        f"/pantry/{item_id}", json={"note": "Updated note"}, headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["item"]["capacity_g"] == 800
+    assert response.json()["item"]["estimated_g"] == 400
+    async with factory() as session:
+        item = await session.get(PantryItem, uuid.UUID(item_id))
+    assert item is not None
+    assert item.capacity_g == 800
+
+
+async def test_patch_explicit_null_clears_note(api_harness: ApiHarness) -> None:
+    client, factory, _ = api_harness
+    headers, _ = await _headers_and_user(factory)
+    item_id = await _create_coffee(client, headers, note="Remove me")
+
+    response = await client.patch(f"/pantry/{item_id}", json={"note": None}, headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["item"]["note"] is None
+    async with factory() as session:
+        item = await session.get(PantryItem, uuid.UUID(item_id))
+    assert item is not None
+    assert item.note is None
+
+
+async def test_patch_cleared_capacity_is_excluded_from_coffee_alert(
+    api_harness: ApiHarness,
+) -> None:
+    client, factory, _ = api_harness
+    headers, _ = await _headers_and_user(factory)
+    cleared_id = await _create_coffee(
+        client, headers, name="Cleared Coffee", capacity_g=1000, remaining_pct=50
+    )
+    await _create_coffee(client, headers, name="Counted Coffee", capacity_g=400, remaining_pct=50)
+
+    response = await client.patch(
+        f"/pantry/{cleared_id}", json={"capacity_g": None}, headers=headers
+    )
+
+    assert response.status_code == 200
+    assert response.json()["coffee_alert"] == {
+        "alert": True,
+        "total_estimated_g": 200,
+        "threshold_g": 500,
+    }
 
 
 async def test_pantry_requires_auth(api_harness: ApiHarness) -> None:
