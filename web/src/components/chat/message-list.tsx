@@ -1,12 +1,13 @@
 "use client";
 
 import ReactMarkdown, { type Components } from "react-markdown";
+import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RagProgress } from "@/components/chat/rag-progress";
 import { RoutePill } from "@/components/chat/route-pill";
 import { CitationBadge } from "@/components/chat/citation-badge";
 import { cn } from "@/lib/utils";
-import type { ChatMessage, Citation } from "@/lib/chat-types";
+import { isPersistedMessageId, type ChatMessage, type Citation } from "@/lib/chat-types";
 
 // cite.py already strips out-of-range [n] markers from the answer, so every
 // remaining `[n]` in content maps 1:1 to citations[n-1]. We rewrite them to
@@ -38,6 +39,49 @@ function citationComponents(citations: Citation[]): Components {
   };
 }
 
+// webapp-spec S14: 👍/👎, same-button re-click clears the vote. Always
+// faintly visible (not hover-only) so a returning user sees their prior vote
+// without hovering. Only rendered for `status === "done"` messages with a
+// real (non-turn-local) id — see isPersistedMessageId.
+// webapp-spec S14: 👍/👎, 같은 버튼 재클릭은 투표 취소. hover 전용이 아니라
+// 항상 흐리게 보여, 재방문 사용자가 hover 없이도 이전 투표를 볼 수 있게 한다.
+// `status === "done"`이고 실제(턴 로컬 아닌) id를 가진 메시지에만 렌더된다
+// — isPersistedMessageId 참고.
+function FeedbackButtons({
+  rating,
+  onPick,
+}: {
+  rating: -1 | 1 | null | undefined;
+  onPick: (rating: -1 | 1) => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label="좋아요"
+        aria-pressed={rating === 1}
+        className={cn("opacity-60 hover:opacity-100", rating === 1 && "text-primary opacity-100")}
+        onClick={() => onPick(1)}
+      >
+        <ThumbsUp className="size-3.5" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label="싫어요"
+        aria-pressed={rating === -1}
+        className={cn("opacity-60 hover:opacity-100", rating === -1 && "text-primary opacity-100")}
+        onClick={() => onPick(-1)}
+      >
+        <ThumbsDown className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-semantic-error bg-semantic-error-soft p-4 text-body-sm text-semantic-error">
@@ -55,10 +99,12 @@ export function MessageList({
   messages,
   ragLabel,
   onRetry,
+  onFeedback,
 }: {
   messages: ChatMessage[];
   ragLabel?: string | null;
   onRetry?: (messageId: string) => void;
+  onFeedback?: (messageId: string, rating: -1 | 1) => void;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -107,6 +153,12 @@ export function MessageList({
                   {withCitationLinks(message.content)}
                 </ReactMarkdown>
               </div>
+              {onFeedback && message.status === "done" && isPersistedMessageId(message.id) && (
+                <FeedbackButtons
+                  rating={message.myFeedback}
+                  onPick={(rating) => onFeedback(message.id, rating)}
+                />
+              )}
             </div>
           </div>
         );
