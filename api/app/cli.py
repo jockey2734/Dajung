@@ -1,23 +1,36 @@
 """Dajung Ark CLI — MVP1 entry point (Dajung.md §8.2).
 
 Dajung Ark CLI — MVP1 진입점 (Dajung.md §8.2).
-Commands: ingest / ask / stats. Heavy modules are imported lazily so the
+Commands: ingest / ask / stats / invite. Heavy modules are imported lazily so the
 CLI stays responsive and later branches can fill in the implementations.
-명령: ingest / ask / stats. 무거운 모듈은 지연 임포트한다 — CLI 반응성을
+명령: ingest / ask / stats / invite. 무거운 모듈은 지연 임포트한다 — CLI 반응성을
 지키고, 이후 브랜치가 구현을 채워 넣을 수 있게 한다.
 """
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from api.app.core.config import settings
 from api.app.core.logging import configure_logging
+from api.app.invitations import (
+    CreatedInvitation,
+    InvitationPrefixAmbiguousError,
+    InvitationPrefixNotFoundError,
+    InvitationSummary,
+    create_invitation,
+    list_invitations,
+    revoke_invitation,
+)
 
 app = typer.Typer(name="dajung", no_args_is_help=True, add_completion=False)
+invite_app = typer.Typer(no_args_is_help=True, add_completion=False)
+app.add_typer(invite_app, name="invite", help="통과번호 관리")
 
 # Default CLI identity until serving-phase auth exists (Dajung.md §8.8).
 # 서빙 단계 인증이 생기기 전까지의 CLI 기본 신원 (Dajung.md §8.8).
@@ -29,6 +42,86 @@ _NOT_IMPLEMENTED = "아직 구현되지 않았습니다 — 해당 브랜치({br
 @app.callback()
 def _init() -> None:
     configure_logging()
+
+
+def _session_factory() -> async_sessionmaker[AsyncSession]:
+    from api.app.db.base import SessionLocal
+
+    return SessionLocal
+
+
+async def _create_code(note: str | None, days: int) -> CreatedInvitation:
+    factory = _session_factory()
+    async with factory() as session:
+        return await create_invitation(session, note=note, days=days)
+
+
+async def _list_codes() -> list[InvitationSummary]:
+    factory = _session_factory()
+    async with factory() as session:
+        return await list_invitations(session)
+
+
+async def _revoke_code(prefix: str) -> InvitationSummary:
+    factory = _session_factory()
+    async with factory() as session:
+        return await revoke_invitation(session, prefix)
+
+
+@invite_app.command("create")
+def invite_create(
+    note: Annotated[str | None, typer.Option("--note", help="수신자 메모")] = None,
+    days: Annotated[int, typer.Option("--days", help="유효 기간(일)")] = 7,
+) -> None:
+    """Issue a code and show its plaintext exactly once.
+
+    통과번호를 발급하고 평문을 정확히 한 번 표시한다.
+    """
+    created = asyncio.run(_create_code(note, days))
+    typer.echo(f"통과번호: {created.code}")
+    typer.echo(f"만료: {created.expires_at.isoformat()}")
+    typer.echo(f"메모: {created.note or '-'}")
+    typer.echo("주의: 카카오톡·문자로만 전달하고 로그·파일에 기록하지 마세요.")
+
+
+@invite_app.command("list")
+def invite_list() -> None:
+    """List safe invitation metadata without plaintext codes.
+
+    평문 없이 안전한 통과번호 메타데이터를 조회한다.
+    """
+    rows = asyncio.run(_list_codes())
+    typer.echo("평문 복원 불가 — SHA-256 해시만 저장됩니다.")
+    typer.echo("ID       메모                 만료                       상태    사용 시각")
+    if not rows:
+        typer.echo("(없음)")
+        return
+    for row in rows:
+        note = (row.note or "-")[:20]
+        used_at = row.used_at.isoformat() if row.used_at is not None else "-"
+        typer.echo(
+            f"{str(row.id)[:8]} {note:<20} "
+            f"{row.expires_at.isoformat():<26} {row.status:<5} {used_at}"
+        )
+
+
+@invite_app.command("revoke")
+def invite_revoke(
+    id_prefix: Annotated[str, typer.Argument(help="통과번호 ID 앞자리")],
+) -> None:
+    """Expire one invitation selected by an unambiguous ID prefix.
+
+    모호하지 않은 ID prefix로 통과번호 하나를 즉시 만료한다.
+    """
+    try:
+        revoked = asyncio.run(_revoke_code(id_prefix))
+    except InvitationPrefixNotFoundError:
+        typer.echo(f"일치하는 통과번호가 없습니다: {id_prefix}", err=True)
+        raise typer.Exit(code=1) from None
+    except InvitationPrefixAmbiguousError:
+        typer.echo(f"ID prefix가 모호합니다: {id_prefix}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"폐기 완료: {str(revoked.id)[:8]}")
 
 
 @app.command()
