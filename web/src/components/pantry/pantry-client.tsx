@@ -58,9 +58,10 @@ export function PantryClient() {
       )}
 
       {isMobile ? (
-        <PantryCardList 
-          items={items} 
-          sort={sort} 
+        <PantryCardList
+          items={items}
+          sort={sort}
+          order={order}
           onSortChange={handleSortChange}
           onUpdate={updateItem}
           onDelete={deleteItem}
