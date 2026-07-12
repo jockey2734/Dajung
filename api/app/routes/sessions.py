@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Literal, cast
 
 from fastapi import APIRouter
-from sqlalchemy import select
+from sqlalchemy import and_, select
 
 from api.app.core.deps import CurrentUser, SessionDep
 from api.app.core.errors import ApiError
-from api.app.db.models import ChatSession, Message
+from api.app.db.models import ChatSession, Feedback, Message
 from api.app.schemas.chat import (
     MessageOut,
     SessionDetailResponse,
@@ -71,29 +72,33 @@ async def get_session_detail(
 ) -> SessionDetailResponse:
     chat = await _owned_session(session_id, current, session)
     rows = (
-        (
-            await session.execute(
-                select(Message)
-                .where(Message.session_id == chat.id, Message.deleted_at.is_(None))
-                .order_by(Message.sequence_no)
+        await session.execute(
+            select(Message, Feedback.rating)
+            .outerjoin(
+                Feedback,
+                and_(
+                    Feedback.message_id == Message.id,
+                    Feedback.user_id == current.id,
+                ),
             )
+            .where(Message.session_id == chat.id, Message.deleted_at.is_(None))
+            .order_by(Message.sequence_no)
         )
-        .scalars()
-        .all()
-    )
+    ).all()
     return SessionDetailResponse(
         id=chat.id,
         title=chat.title,
         messages=[
             MessageOut(
-                id=m.id,
-                role=m.role,
-                content=m.content,
-                metadata=m.meta,
-                created_at=m.created_at,
+                id=message.id,
+                role=message.role,
+                content=message.content,
+                metadata=message.meta,
+                created_at=message.created_at,
+                my_feedback=cast(Literal[-1, 1] | None, my_feedback),
             )
-            for m in rows
-            if m.role in ("user", "assistant")
+            for message, my_feedback in rows
+            if message.role in ("user", "assistant")
         ],
     )
 

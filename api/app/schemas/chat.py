@@ -42,6 +42,7 @@ class MessageOut(BaseModel):
     content: str
     metadata: dict[str, Any]
     created_at: datetime
+    my_feedback: Literal[-1, 1] | None = None
 
 
 class SessionDetailResponse(BaseModel):

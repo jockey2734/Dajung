@@ -25,7 +25,7 @@ from api.app.core.errors import ApiError
 from api.app.core.lockout import LoginLockout
 from api.app.core.ratelimit import limiter
 from api.app.jobs.memory import create_memory_scheduler
-from api.app.routes import auth, chat, files, pantry, privacy, sessions, uploads
+from api.app.routes import auth, chat, feedback, files, pantry, privacy, sessions, uploads
 
 
 @asynccontextmanager
@@ -83,6 +83,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(chat.router)
+    app.include_router(feedback.router)
     app.include_router(sessions.router)
     app.include_router(files.router)
     app.include_router(privacy.router)
