@@ -29,6 +29,7 @@ from api.app.routes import (
     admin,
     admin_accounts,
     admin_invitations,
+    admin_roster,
     auth,
     chat,
     feedback,
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router)
     app.include_router(admin_accounts.router)
     app.include_router(admin_invitations.router)
+    app.include_router(admin_roster.router)
     app.include_router(chat.router)
     app.include_router(feedback.router)
     app.include_router(sessions.router)
