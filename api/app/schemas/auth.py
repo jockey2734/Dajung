@@ -30,6 +30,7 @@ class UserOut(BaseModel):
     email: EmailStr
     name: str
     role: str
+    must_change_password: bool
 
 
 class SigninRequest(BaseModel):
@@ -40,3 +41,8 @@ class SigninRequest(BaseModel):
 class SigninResponse(BaseModel):
     access_token: str
     user: UserOut
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=72)
+    new_password: str = Field(min_length=8, max_length=72)
