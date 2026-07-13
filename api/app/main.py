@@ -28,6 +28,7 @@ from api.app.jobs.memory import create_memory_scheduler
 from api.app.routes import (
     admin,
     admin_accounts,
+    admin_invitations,
     auth,
     chat,
     feedback,
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(admin.router)
     app.include_router(admin_accounts.router)
+    app.include_router(admin_invitations.router)
     app.include_router(chat.router)
     app.include_router(feedback.router)
     app.include_router(sessions.router)
