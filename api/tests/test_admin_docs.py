@@ -84,6 +84,13 @@ async def test_upload_rejects_unsafe_targets(
     )
 
 
+def test_document_target_rejects_nul_filename(
+    document_paths: tuple[Path, Path],
+) -> None:
+    with pytest.raises(documents.DocumentValidationError):
+        documents.validate_document_target("knowledge", "bad\x00.md")
+
+
 async def test_upload_rejects_oversize_and_existing_file(
     api_harness: ApiHarness,
     document_paths: tuple[Path, Path],
@@ -107,6 +114,7 @@ async def test_upload_rejects_oversize_and_existing_file(
     )
 
     assert oversize.status_code == 400
+    assert oversize.json()["error"]["message"] == "파일 크기는 32바이트를 넘을 수 없습니다."
     assert conflict.status_code == 409
     assert (knowledge / "exists.md").read_text(encoding="utf-8") == "original"
 

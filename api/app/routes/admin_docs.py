@@ -29,6 +29,16 @@ from api.app.schemas.admin_docs import DocumentUploadOut
 router = APIRouter(prefix="/admin/docs", tags=["admin"])
 
 
+def _format_file_size_limit(size_bytes: int) -> str:
+    megabyte = 1024 * 1024
+    kilobyte = 1024
+    if size_bytes % megabyte == 0:
+        return f"{size_bytes // megabyte}MB"
+    if size_bytes % kilobyte == 0:
+        return f"{size_bytes // kilobyte}KB"
+    return f"{size_bytes}바이트"
+
+
 @router.post("", status_code=202)
 async def upload_document(
     background_tasks: BackgroundTasks,
@@ -39,7 +49,8 @@ async def upload_document(
     filename = file.filename or ""
     data = await file.read(settings.upload_max_file_bytes + 1)
     if len(data) > settings.upload_max_file_bytes:
-        raise ApiError(400, "validation", "파일 크기는 20MB를 넘을 수 없습니다.")
+        limit = _format_file_size_limit(settings.upload_max_file_bytes)
+        raise ApiError(400, "validation", f"파일 크기는 {limit}를 넘을 수 없습니다.")
     try:
         target = await run_in_threadpool(store_document, folder, filename, data)
     except DocumentValidationError as exc:

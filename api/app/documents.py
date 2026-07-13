@@ -83,6 +83,7 @@ def validate_document_target(folder: str, filename: str) -> Path:
         or ".." in filename
         or "/" in filename
         or "\\" in filename
+        or "\x00" in filename
         or len(filename.encode("utf-8")) > MAX_DOCUMENT_FILENAME_CHARS
     ):
         raise DocumentValidationError("안전하지 않은 파일명입니다.")
