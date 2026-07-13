@@ -14,6 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   bad_credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
   locked_out: "로그인 시도가 너무 많습니다. 1시간 후 다시 시도해 주세요.",
   validation: "이메일과 비밀번호를 입력해 주세요.",
+  account_expired: "계정 임기가 만료되었습니다. 회장에게 연장을 요청해 주세요.",
 };
 const DEFAULT_ERROR_MESSAGE = "로그인에 실패했습니다. 다시 시도해 주세요.";
 
@@ -22,7 +23,14 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // Seeded from ?error= so a mid-session expiry (use-admin.ts signs out with
+  // callbackUrl /login?error=account_expired) shows its message here too.
+  // ?error=로 초기화 — 세션 도중 만료(use-admin.ts가 callbackUrl
+  // /login?error=account_expired로 signOut)도 여기서 메시지를 보여준다.
+  const [error, setError] = useState<string | null>(() => {
+    const code = searchParams.get("error");
+    return code ? (ERROR_MESSAGES[code] ?? null) : null;
+  });
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(event: FormEvent) {

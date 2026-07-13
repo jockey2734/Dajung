@@ -51,7 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // pnpm이 이를 hoist하지 않아 선언 병합이 붙지 않는다 — token.id/token.role이
       // JWT 자체 인덱스 시그니처로 인해 unknown으로 남는다. 명시적으로 좁혀 쓴다.
       session.user.id = token.id as string;
-      session.user.role = token.role as "owner" | "staff";
+      session.user.role = token.role as "owner" | "president" | "staff";
       return session;
     },
     // Drives middleware.ts: unauthenticated requests to the (app) route

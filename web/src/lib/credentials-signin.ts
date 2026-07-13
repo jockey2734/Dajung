@@ -6,7 +6,7 @@ interface SigninUser {
   id: string;
   email: string;
   name: string;
-  role: "owner" | "staff";
+  role: "owner" | "president" | "staff";
 }
 
 interface SigninResponse {
