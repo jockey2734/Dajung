@@ -133,6 +133,27 @@ async def test_upload_rejects_symlinked_folder(
     assert not (outside / "escape.md").exists()
 
 
+async def test_list_document_folders_returns_sorted_safe_directories(
+    api_harness: ApiHarness,
+    document_paths: tuple[Path, Path],
+    tmp_path: Path,
+) -> None:
+    client, factory, _ = api_harness
+    headers = await _owner_headers(factory)
+    data_dir = document_paths[0]
+    (data_dir / "zeta").mkdir()
+    (data_dir / "alpha").mkdir()
+    (data_dir / ".hidden").mkdir()
+    outside = tmp_path / "outside-folders"
+    outside.mkdir()
+    (data_dir / "linked").symlink_to(outside, target_is_directory=True)
+
+    response = await client.get("/admin/docs/folders", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == ["alpha", "knowledge", "zeta"]
+
+
 async def test_upload_stores_and_dispatches_one_file(
     api_harness: ApiHarness,
     document_paths: tuple[Path, Path],
@@ -255,11 +276,13 @@ async def test_document_routes_require_admin(
         await session.commit()
     headers = {"Authorization": f"Bearer {create_access_token(staff.id, staff.email, staff.role)}"}
 
-    response = await client.post(
+    upload_response = await client.post(
         "/admin/docs",
         headers=headers,
         data={"folder": "knowledge"},
         files={"file": ("guide.md", b"text", "text/markdown")},
     )
+    folders_response = await client.get("/admin/docs/folders", headers=headers)
 
-    assert response.status_code == 403
+    assert upload_response.status_code == 403
+    assert folders_response.status_code == 403

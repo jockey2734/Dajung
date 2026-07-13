@@ -19,6 +19,7 @@ from api.app.documents import (
     DocumentInfrastructureError,
     DocumentNotFoundError,
     DocumentValidationError,
+    available_document_folders,
     delete_document,
     ingest_document,
     store_document,
@@ -47,6 +48,15 @@ async def upload_document(
         raise ApiError(409, "document_conflict", "같은 이름의 문서가 이미 있습니다.") from exc
     background_tasks.add_task(ingest_document, target)
     return DocumentUploadOut(folder=folder, filename=filename)
+
+
+@router.get("/folders")
+async def list_document_folders(current: AdminUser) -> list[str]:
+    """List safe upload destinations in stable display order.
+
+    안전한 업로드 대상 폴더를 일정한 표시 순서로 반환한다.
+    """
+    return sorted(available_document_folders())
 
 
 @router.delete("/{doc_id}", status_code=204)
