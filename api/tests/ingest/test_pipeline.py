@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from api.app.ingest.pipeline import run_ingest
+from api.app.ingest.pipeline import run_ingest, run_ingest_file
 
 
 @pytest.fixture(autouse=True)
@@ -66,3 +66,9 @@ def test_summary_format(tmp_docs: Path) -> None:
     report = run_ingest(tmp_docs, dry_run=True)
     text = report.summary()
     assert "scanned: 2" in text and "errors: 0" in text
+
+
+def test_single_file_dry_run_only_scans_target(tmp_docs: Path) -> None:
+    report = run_ingest_file(tmp_docs / "guide.md", dry_run=True)
+    assert report.scanned == 1
+    assert report.errors == []

@@ -32,6 +32,7 @@ def test_users_columns_match_webapp_plan() -> None:
         "status",
         "profile",
         "expires_at",
+        "must_change_password",
         "last_seen_at",
         "created_at",
         "updated_at",

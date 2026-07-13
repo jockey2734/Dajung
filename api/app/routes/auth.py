@@ -30,6 +30,7 @@ from api.app.core.security import (
 )
 from api.app.db.models import InvitationCode, User
 from api.app.schemas.auth import (
+    PasswordChangeRequest,
     SigninRequest,
     SigninResponse,
     SignupRequest,
@@ -124,3 +125,20 @@ async def me(current: CurrentUser) -> UserOut:
     BFF용 세션 확인 — 토큰을 검증하고 사용자를 돌려준다.
     """
     return UserOut.model_validate(current)
+
+
+@router.patch("/password", status_code=204)
+async def change_password(
+    body: PasswordChangeRequest,
+    current: CurrentUser,
+    session: SessionDep,
+) -> None:
+    """Change the current password and clear the reset-required flag.
+
+    현재 비밀번호를 변경하고 재설정 필요 표시를 해제한다.
+    """
+    if not verify_password(body.current_password, current.password_hash):
+        raise ApiError(400, "bad_credentials", "현재 비밀번호가 올바르지 않습니다.")
+    current.password_hash = hash_password(body.new_password)
+    current.must_change_password = False
+    await session.commit()

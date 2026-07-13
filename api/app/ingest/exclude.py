@@ -20,7 +20,7 @@ def is_excluded(path: Path, csv_category: str | None = None) -> tuple[bool, str]
 
     ingest가 이 파일을 건너뛰어야 하는지 판정한다.
     Returns (excluded, reason); reason is one of
-    "incident" | "tempfile" | "image" | "hidden" | "".
+    "incident" | "tempfile" | "image" | "trash" | "hidden" | "".
     (제외 여부, 사유)를 반환한다.
     """
     # Rule 1 — incident originals never enter the index (ADR-013).
@@ -43,8 +43,13 @@ def is_excluded(path: Path, csv_category: str | None = None) -> tuple[bool, str]
     if csv_category in _IMAGE_CATEGORIES:
         return True, "image"
 
-    # Rule 5 — hidden files.
-    # 규칙 5 — 숨김 파일.
+    # Rule 5 — recoverable deletions never re-enter the index.
+    # 규칙 5 — 복구용 삭제 파일은 인덱스에 다시 들어가지 않는다.
+    if ".trash" in path.parts:
+        return True, "trash"
+
+    # Rule 6 — hidden files.
+    # 규칙 6 — 숨김 파일.
     if path.name.startswith("."):
         return True, "hidden"
 
