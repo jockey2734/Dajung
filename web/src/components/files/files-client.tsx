@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FileText, LockKeyhole, Search } from "lucide-react";
+import { FileText, LockKeyhole, RefreshCw, Search, Trash2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useFiles } from "@/lib/use-files";
 import type { FileEntry } from "@/types/files";
@@ -53,7 +54,27 @@ function EmptyState({ hasSearch }: { hasSearch: boolean }) {
   );
 }
 
-function FilesTable({ files }: { files: FileEntry[] }) {
+function DeleteButton({ file, onDeleteRequest }: { file: FileEntry; onDeleteRequest: (file: FileEntry) => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={`${file.source_file} 삭제`}
+      className="text-taupe hover:text-semantic-error"
+      onClick={() => onDeleteRequest(file)}
+    >
+      <Trash2 className="size-4" />
+    </Button>
+  );
+}
+
+function FilesTable({
+  files,
+  onDeleteRequest,
+}: {
+  files: FileEntry[];
+  onDeleteRequest?: (file: FileEntry) => void;
+}) {
   return (
     <div className="hidden w-full overflow-x-auto rounded-md border border-hairline bg-canvas md:block">
       <table className="w-full border-collapse text-left">
@@ -63,6 +84,7 @@ function FilesTable({ files }: { files: FileEntry[] }) {
             <th className="px-4 py-3">종류</th>
             <th className="px-4 py-3">학기</th>
             <th className="px-4 py-3 text-right">청크 수</th>
+            {onDeleteRequest && <th className="px-4 py-3 w-12" />}
           </tr>
         </thead>
         <tbody className="text-body-sm">
@@ -77,6 +99,11 @@ function FilesTable({ files }: { files: FileEntry[] }) {
               <td className="px-4 py-3 text-mocha">{docTypeLabel(file.doc_type)}</td>
               <td className="px-4 py-3 text-taupe">{file.semester ?? "-"}</td>
               <td className="px-4 py-3 text-right font-mono text-ink">{file.chunk_count}</td>
+              {onDeleteRequest && (
+                <td className="px-4 py-3 text-right">
+                  <DeleteButton file={file} onDeleteRequest={onDeleteRequest} />
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -85,12 +112,21 @@ function FilesTable({ files }: { files: FileEntry[] }) {
   );
 }
 
-function FilesCardList({ files }: { files: FileEntry[] }) {
+function FilesCardList({
+  files,
+  onDeleteRequest,
+}: {
+  files: FileEntry[];
+  onDeleteRequest?: (file: FileEntry) => void;
+}) {
   return (
     <div className="grid gap-3 md:hidden">
       {files.map((file) => (
         <article key={file.doc_id} className="rounded-md border border-hairline bg-canvas p-3 shadow-sm">
-          <FileName file={file} />
+          <div className="flex items-start justify-between gap-2">
+            <FileName file={file} />
+            {onDeleteRequest && <DeleteButton file={file} onDeleteRequest={onDeleteRequest} />}
+          </div>
           <dl className="mt-3 grid grid-cols-3 gap-2 text-caption">
             <div>
               <dt className="text-taupe">종류</dt>
@@ -111,8 +147,25 @@ function FilesCardList({ files }: { files: FileEntry[] }) {
   );
 }
 
-export function FilesClient() {
-  const { files, loading, error } = useFiles();
+// Embedded mode (S21 admin docs tab) drops the page chrome, adds a refresh
+// button (uploads index in the background — the list lags until re-fetched)
+// and a per-row delete request hook. /files renders it with no props, so
+// the staff-facing page is byte-for-byte the S9 behavior.
+// embedded 모드(S21 관리자 문서 탭)는 페이지 크롬을 빼고 새로고침 버튼
+// (업로드는 백그라운드 인덱싱 — 재조회 전까지 목록이 뒤처짐)과 행 단위 삭제
+// 요청을 붙인다. /files는 prop 없이 렌더하므로 staff용 화면은 S9 동작
+// 그대로다.
+export function FilesClient({
+  embedded = false,
+  onDeleteRequest,
+  reloadKey = 0,
+}: {
+  embedded?: boolean;
+  onDeleteRequest?: (file: FileEntry) => void;
+  reloadKey?: number;
+} = {}) {
+  const [internalReload, setInternalReload] = useState(0);
+  const { files, loading, error } = useFiles(reloadKey + internalReload);
   const [query, setQuery] = useState("");
 
   const filteredFiles = useMemo(() => {
@@ -127,21 +180,43 @@ export function FilesClient() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 pb-20 sm:p-6">
+    <div
+      className={
+        embedded
+          ? "flex w-full flex-col gap-4"
+          : "mx-auto flex w-full max-w-5xl flex-col gap-4 p-4 pb-20 sm:p-6"
+      }
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-heading-2 font-semibold text-ink tracking-tight">자료 목록</h1>
-          <p className="mt-1 text-caption text-taupe">{files.length}개 자료</p>
+          {!embedded && (
+            <h1 className="text-heading-2 font-semibold text-ink tracking-tight">자료 목록</h1>
+          )}
+          <p className={embedded ? "text-caption text-taupe" : "mt-1 text-caption text-taupe"}>
+            {files.length}개 자료
+          </p>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-taupe" />
-          <Input
-            aria-label="파일명 검색"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="파일명 검색"
-            className="pl-8"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-taupe" />
+            <Input
+              aria-label="파일명 검색"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="파일명 검색"
+              className="pl-8"
+            />
+          </div>
+          {embedded && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="목록 새로고침"
+              onClick={() => setInternalReload((n) => n + 1)}
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -159,8 +234,8 @@ export function FilesClient() {
       ) : (
         !error && (
           <>
-            <FilesTable files={filteredFiles} />
-            <FilesCardList files={filteredFiles} />
+            <FilesTable files={filteredFiles} onDeleteRequest={onDeleteRequest} />
+            <FilesCardList files={filteredFiles} onDeleteRequest={onDeleteRequest} />
           </>
         )
       )}

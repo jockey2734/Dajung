@@ -37,3 +37,36 @@ export interface TemporaryPasswordOut {
   user_id: string;
   temporary_password: string;
 }
+
+// S19 backend renders status in Korean already — the FE maps colors only.
+// S19 백엔드가 상태를 한국어로 반환 — FE는 색만 입힌다.
+export interface InvitationOut {
+  id: string;
+  note: string | null;
+  expires_at: string;
+  status: "활성" | "만료" | "사용됨";
+  used_at: string | null;
+}
+
+export interface InvitationCreatedOut {
+  id: string;
+  code: string;
+  note: string | null;
+  expires_at: string;
+}
+
+export interface RosterOut {
+  id: string;
+  semester: string;
+  department: string;
+  member_name: string;
+  position: string | null;
+  user_id: string | null;
+  created_at: string;
+}
+
+export interface DocumentUploadOut {
+  folder: string;
+  filename: string;
+  status: "processing";
+}

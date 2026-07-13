@@ -3,13 +3,16 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TransferTab } from "@/components/admin/transfer-tab";
 import { AccountsTab } from "@/components/admin/accounts-tab";
+import { InvitationsTab } from "@/components/admin/invitations-tab";
+import { RosterTab } from "@/components/admin/roster-tab";
+import { DocsTab } from "@/components/admin/docs-tab";
 import { useAdmin } from "@/lib/use-admin";
 import type { Role } from "@/types/admin";
 
-// Tab surface (webapp-spec S20): 권한 이양·계정 now, 시스템 = owner-only
-// placeholder. 통과번호·학기별 명단·문서 are S21 — hidden until then.
-// 탭 구성 (webapp-spec S20): 지금은 권한 이양·계정, 시스템 = owner 전용
-// placeholder. 통과번호·학기별 명단·문서는 S21 — 그때까지 숨김.
+// Full tab surface (webapp-spec S20+S21): 권한 이양·계정·통과번호·학기별
+// 명단·문서, 시스템 = owner-only placeholder.
+// 전체 탭 구성 (webapp-spec S20+S21): 권한 이양·계정·통과번호·학기별
+// 명단·문서, 시스템 = owner 전용 placeholder.
 export function AdminShell({ viewerId, viewerRole }: { viewerId: string; viewerRole: Role }) {
   const {
     users,
@@ -35,9 +38,12 @@ export function AdminShell({ viewerId, viewerRole }: { viewerId: string; viewerR
         </div>
       )}
       <Tabs defaultValue="transfer">
-        <TabsList className="w-full sm:w-fit">
+        <TabsList className="w-full overflow-x-auto sm:w-fit">
           <TabsTrigger value="transfer">권한 이양</TabsTrigger>
           <TabsTrigger value="accounts">계정</TabsTrigger>
+          <TabsTrigger value="invitations">통과번호</TabsTrigger>
+          <TabsTrigger value="roster">학기별 명단</TabsTrigger>
+          <TabsTrigger value="docs">문서</TabsTrigger>
           {viewerRole === "owner" && <TabsTrigger value="system">시스템</TabsTrigger>}
         </TabsList>
         <TabsContent value="transfer" className="pt-2">
@@ -57,6 +63,15 @@ export function AdminShell({ viewerId, viewerRole }: { viewerId: string; viewerR
             onUpdate={updateUser}
             onResetPassword={resetPassword}
           />
+        </TabsContent>
+        <TabsContent value="invitations" className="pt-2">
+          <InvitationsTab />
+        </TabsContent>
+        <TabsContent value="roster" className="pt-2">
+          <RosterTab users={users} />
+        </TabsContent>
+        <TabsContent value="docs" className="pt-2">
+          <DocsTab />
         </TabsContent>
         {viewerRole === "owner" && (
           <TabsContent value="system" className="pt-2">
