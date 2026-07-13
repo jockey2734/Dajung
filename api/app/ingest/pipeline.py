@@ -70,7 +70,7 @@ class IngestReport:
         return "\n".join(lines)
 
 
-def _load_manifest() -> dict[str, str]:
+def load_manifest() -> dict[str, str]:
     path = settings.manifest_path
     if path.exists():
         data: dict[str, str] = json.loads(path.read_text(encoding="utf-8"))
@@ -78,7 +78,7 @@ def _load_manifest() -> dict[str, str]:
     return {}
 
 
-def _flush_manifest(manifest: dict[str, str]) -> None:
+def flush_manifest(manifest: dict[str, str]) -> None:
     path = settings.manifest_path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -92,16 +92,29 @@ def run_ingest(target_dir: Path, rebuild: bool = False, dry_run: bool = False) -
     and the manifest is left untouched.
     dry_run: 파싱·청킹 통계만 — LLM·임베딩·업서트 없음, 매니페스트도 안 건드림.
     """
+    paths = sorted(path for path in target_dir.rglob("*") if path.is_file())
+    return _run_ingest_paths(paths, rebuild=rebuild, dry_run=dry_run)
+
+
+def run_ingest_file(path: Path, dry_run: bool = False) -> IngestReport:
+    """Ingest one eligible file through the same pipeline as the CLI.
+
+    CLI와 같은 파이프라인으로 대상 파일 하나만 인덱싱한다.
+    """
+    return _run_ingest_paths([path], rebuild=False, dry_run=dry_run)
+
+
+def _run_ingest_paths(paths: list[Path], *, rebuild: bool, dry_run: bool) -> IngestReport:
     report = IngestReport()
     csv_index = load_csv_index(settings.csv_path)
-    manifest = {} if rebuild else _load_manifest()
+    manifest = {} if rebuild else load_manifest()
 
     if not dry_run:
         from api.app.rag.qdrant_store import ensure_collection
 
         ensure_collection()
 
-    for path in sorted(p for p in target_dir.rglob("*") if p.is_file()):
+    for path in paths:
         csv_row: CsvRow | None = csv_index.get(path.name)
         excluded, reason = is_excluded(path, csv_row.category if csv_row else None)
         if excluded:
@@ -170,7 +183,7 @@ def run_ingest(target_dir: Path, rebuild: bool = False, dry_run: bool = False) -
             )
 
             manifest[str(path)] = doc_hash
-            _flush_manifest(manifest)
+            flush_manifest(manifest)
             log.info("ingested", file=path.name, chunks=len(chunks))
 
         except ParserError as exc:

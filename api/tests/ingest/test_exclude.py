@@ -46,6 +46,11 @@ def test_hidden_file_excluded() -> None:
     assert excluded and reason == "hidden"
 
 
+def test_trash_directory_excluded() -> None:
+    excluded, reason = is_excluded(Path("data/.trash/deleted-guide.md"))
+    assert excluded and reason == "trash"
+
+
 def test_normal_files_pass() -> None:
     for name in ("25-1 다정 예산안.xlsx", "회의록.docx", "인수인계.pdf", "guide.md"):
         excluded, reason = is_excluded(Path("data") / name, csv_category="예산안")
