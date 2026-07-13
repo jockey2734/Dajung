@@ -40,7 +40,7 @@ afterEach(() => {
 describe("FilesClient", () => {
   it("filters the read-only list by source filename", async () => {
     const user = userEvent.setup();
-    mockUseFiles.mockReturnValue({ files: FILES, loading: false, error: null });
+    mockUseFiles.mockReturnValue({ files: FILES, loading: false, error: null, refetch: () => {} });
 
     render(<FilesClient />);
 
@@ -55,7 +55,7 @@ describe("FilesClient", () => {
   });
 
   it("renders the empty indexed-files message", () => {
-    mockUseFiles.mockReturnValue({ files: [], loading: false, error: null });
+    mockUseFiles.mockReturnValue({ files: [], loading: false, error: null, refetch: () => {} });
 
     render(<FilesClient />);
 

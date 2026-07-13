@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
-import { flashToast } from "@/components/shell/toast-provider";
+import { useAdminEscalate } from "@/lib/admin-escalate";
 import type {
   AdminUserOut,
   PresidentTransferOut,
@@ -13,45 +11,18 @@ import type {
 
 const GENERIC_ERROR = "요청을 처리하지 못했습니다.";
 
-class AdminApiError extends Error {
-  code: string;
-
-  constructor(code: string, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
-
 export function useAdmin() {
-  const router = useRouter();
   const [users, setUsers] = useState<AdminUserOut[]>([]);
   const [president, setPresident] = useState<PresidentUserOut | null>(null);
   const [transfers, setTransfers] = useState<PresidentTransferOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Central escape hatches (webapp-spec S20): 403 means the viewer just lost
-  // admin (the post-transfer case) — leave with a toast; account_expired
-  // means the API now rejects every call — back to login with the message.
-  // 중앙 이탈 처리 (webapp-spec S20): 403은 방금 관리자 권한을 잃은 경우
-  // (이양 직후 케이스) — 토스트와 함께 이탈. account_expired는 이제 모든
-  // 호출이 거부되는 상태 — 메시지와 함께 로그인 화면으로.
-  const escalate = useCallback(
-    async (response: Response): Promise<never> => {
-      const body = (await response.json().catch(() => null)) as {
-        error?: { code?: string; message?: string };
-      } | null;
-      const code = body?.error?.code ?? "unknown";
-      if (response.status === 403) {
-        flashToast("권한이 없습니다.");
-        router.push("/chat");
-      } else if (response.status === 401 && code === "account_expired") {
-        await signOut({ callbackUrl: "/login?error=account_expired" });
-      }
-      throw new AdminApiError(code, body?.error?.message ?? GENERIC_ERROR);
-    },
-    [router],
-  );
+  // Shared 403/account_expired handling — extracted to admin-escalate.ts so
+  // the S21 tab hooks use the identical policy.
+  // 403/account_expired 공통 처리 — S21 탭 훅들이 동일 정책을 쓰도록
+  // admin-escalate.ts로 추출.
+  const escalate = useAdminEscalate();
 
   const refresh = useCallback(async () => {
     try {

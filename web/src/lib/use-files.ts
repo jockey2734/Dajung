@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { FileEntry, FileListResponse } from "@/types/files";
 
@@ -19,10 +19,15 @@ async function apiErrorMessage(response: Response): Promise<string> {
   }
 }
 
-export function useFiles() {
+// `externalReloadKey` lets a parent (S21's docs tab) force a reload after a
+// delete or to pick up a background-ingested upload; /files never passes it.
+// `externalReloadKey`로 부모(S21 문서 탭)가 삭제 후·백그라운드 인덱싱 반영용
+// 재조회를 강제할 수 있다. /files는 넘기지 않는다.
+export function useFiles(externalReloadKey = 0) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
     let ignore = false;
@@ -55,7 +60,9 @@ export function useFiles() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [reloadCount, externalReloadKey]);
 
-  return { files, loading, error };
+  const refetch = useCallback(() => setReloadCount((n) => n + 1), []);
+
+  return { files, loading, error, refetch };
 }
