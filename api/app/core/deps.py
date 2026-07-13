@@ -18,6 +18,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.app.core.account_term import ACCOUNT_EXPIRED_MESSAGE, is_account_expired
 from api.app.core.errors import ApiError
 from api.app.core.security import decode_access_token
 from api.app.db.base import get_session
@@ -61,7 +62,35 @@ async def get_current_user(
     user = await session.get(User, uuid.UUID(claims["sub"]))
     if user is None or user.status != "active":
         raise ApiError(401, "token_invalid", "사용할 수 없는 계정입니다.")
+    if is_account_expired(user.role, user.expires_at):
+        raise ApiError(401, "account_expired", ACCOUNT_EXPIRED_MESSAGE)
     return user
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def require_admin(current: CurrentUser) -> User:
+    """Require owner or president authority.
+
+    owner 또는 president 권한을 요구한다.
+    """
+    if current.role not in {"owner", "president"}:
+        raise ApiError(403, "admin_required", "관리자 권한이 필요합니다.")
+    return current
+
+
+AdminUser = Annotated[User, Depends(require_admin)]
+
+
+async def require_owner(current: CurrentUser) -> User:
+    """Require owner authority.
+
+    owner 권한을 요구한다.
+    """
+    if current.role != "owner":
+        raise ApiError(403, "admin_required", "owner 권한이 필요합니다.")
+    return current
+
+
+OwnerUser = Annotated[User, Depends(require_owner)]
