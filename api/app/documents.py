@@ -63,7 +63,10 @@ def available_document_folders() -> set[str]:
     return {
         path.name
         for path in root.iterdir()
-        if path.is_dir() and not path.name.startswith(".") and path.name != "사건사고"
+        if path.is_dir()
+        and not path.is_symlink()
+        and not path.name.startswith(".")
+        and path.name != "사건사고"
     }
 
 
@@ -80,13 +83,15 @@ def validate_document_target(folder: str, filename: str) -> Path:
         or ".." in filename
         or "/" in filename
         or "\\" in filename
-        or len(filename) > MAX_DOCUMENT_FILENAME_CHARS
+        or len(filename.encode("utf-8")) > MAX_DOCUMENT_FILENAME_CHARS
     ):
         raise DocumentValidationError("안전하지 않은 파일명입니다.")
     if Path(filename).suffix.lower() not in ALLOWED_DOCUMENT_EXTENSIONS:
         raise DocumentValidationError("지원하지 않는 파일 형식입니다.")
 
     target = settings.data_dir / folder / filename
+    if target.parent.resolve() != (settings.data_dir / folder).resolve():
+        raise DocumentValidationError("안전하지 않은 파일 경로입니다.")
     if target.exists():
         raise DocumentConflictError(filename)
     return target
@@ -98,7 +103,11 @@ def store_document(folder: str, filename: str, data: bytes) -> Path:
     검증한 문서를 기존 데이터를 교체하지 않고 저장한다.
     """
     target = validate_document_target(folder, filename)
-    target.write_bytes(data)
+    try:
+        with target.open("xb") as output:
+            output.write(data)
+    except FileExistsError as exc:
+        raise DocumentConflictError(filename) from exc
     return target
 
 

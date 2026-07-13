@@ -111,6 +111,28 @@ async def test_upload_rejects_oversize_and_existing_file(
     assert (knowledge / "exists.md").read_text(encoding="utf-8") == "original"
 
 
+async def test_upload_rejects_symlinked_folder(
+    api_harness: ApiHarness,
+    document_paths: tuple[Path, Path],
+    tmp_path: Path,
+) -> None:
+    client, factory, _ = api_harness
+    headers = await _owner_headers(factory)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (document_paths[0] / "linked").symlink_to(outside, target_is_directory=True)
+
+    response = await client.post(
+        "/admin/docs",
+        headers=headers,
+        data={"folder": "linked"},
+        files={"file": ("escape.md", b"synthetic", "text/markdown")},
+    )
+
+    assert response.status_code == 400
+    assert not (outside / "escape.md").exists()
+
+
 async def test_upload_stores_and_dispatches_one_file(
     api_harness: ApiHarness,
     document_paths: tuple[Path, Path],
