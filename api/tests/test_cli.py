@@ -15,7 +15,7 @@ runner = CliRunner()
 def test_help_lists_commands() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("ingest", "ask", "stats", "invite", "president"):
+    for command in ("ingest", "ask", "stats", "invite", "owner", "president"):
         assert command in result.output
 
 

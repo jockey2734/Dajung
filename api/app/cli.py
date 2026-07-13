@@ -1,10 +1,10 @@
 """Dajung Ark CLI — MVP1 entry point (Dajung.md §8.2).
 
 Dajung Ark CLI — MVP1 진입점 (Dajung.md §8.2).
-Commands: ingest / ask / stats / invite / president. Heavy modules are imported lazily so the
-CLI stays responsive and later branches can fill in the implementations.
-명령: ingest / ask / stats / invite / president. 무거운 모듈은 지연 임포트한다 — CLI 반응성을
-지키고, 이후 브랜치가 구현을 채워 넣을 수 있게 한다.
+Commands: ingest / ask / stats / invite / owner / president. Heavy modules are imported
+lazily so the CLI stays responsive and later branches can fill in the implementations.
+명령: ingest / ask / stats / invite / owner / president. 무거운 모듈은 지연 임포트한다 —
+CLI 반응성을 지키고, 이후 브랜치가 구현을 채워 넣을 수 있게 한다.
 """
 
 from __future__ import annotations
@@ -29,6 +29,11 @@ from api.app.invitations import (
     list_invitations,
     revoke_invitation,
 )
+from api.app.owners import (
+    OwnerAlreadyExistsError,
+    OwnerUserNotFoundError,
+    claim_initial_owner,
+)
 from api.app.presidents import (
     PresidentTransferSummary,
     PresidentTransferValidationError,
@@ -39,8 +44,10 @@ from api.app.presidents import (
 
 app = typer.Typer(name="dajung", no_args_is_help=True, add_completion=False)
 invite_app = typer.Typer(no_args_is_help=True, add_completion=False)
+owner_app = typer.Typer(no_args_is_help=True, add_completion=False)
 president_app = typer.Typer(no_args_is_help=True, add_completion=False)
 app.add_typer(invite_app, name="invite", help="통과번호 관리")
+app.add_typer(owner_app, name="owner", help="최초 owner 설정")
 app.add_typer(president_app, name="president", help="회장 권한 관리")
 
 # Default CLI identity until serving-phase auth exists (Dajung.md §8.8).
@@ -77,6 +84,12 @@ async def _revoke_code(prefix: str) -> InvitationSummary:
     factory = _session_factory()
     async with factory() as session:
         return await revoke_invitation(session, prefix)
+
+
+async def _claim_owner(email: str) -> User:
+    factory = _session_factory()
+    async with factory() as session:
+        return await claim_initial_owner(session, email)
 
 
 class PresidentCliError(Exception):
@@ -176,6 +189,25 @@ def invite_revoke(
         typer.echo(f"ID prefix가 모호합니다: {id_prefix}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"폐기 완료: {str(revoked.id)[:8]}")
+
+
+@owner_app.command("claim")
+def owner_claim(
+    email: Annotated[str, typer.Argument(help="가입한 최초 owner 이메일")],
+) -> None:
+    """Promote the first signed-up account to owner exactly once.
+
+    최초 가입 계정을 정확히 한 번 owner로 승격한다.
+    """
+    try:
+        owner = asyncio.run(_claim_owner(email))
+    except OwnerAlreadyExistsError:
+        typer.echo("이미 owner 계정이 존재합니다.", err=True)
+        raise typer.Exit(code=1) from None
+    except OwnerUserNotFoundError:
+        typer.echo(f"사용자를 찾을 수 없습니다: {email}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"owner 승격 완료: {owner.name} <{owner.email}>")
 
 
 @president_app.command("set")

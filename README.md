@@ -43,6 +43,26 @@ docker compose config             # validate caddy-only public ports and env wir
 docker compose up -d --build       # run on the server after docs/SECURITY.md §5.7 gates
 ```
 
+### First administrator · 최초 관리자
+
+**EN** — On a fresh database, issue one invitation and complete web signup for the initial
+account. Then claim the one-time owner slot from the server shell. After that, invite the
+current president 서지선 and appoint that signed-up account as president. Replace the example
+emails below; never record the plaintext invitation codes in files or logs.
+
+**KO** — fresh DB에서는 통과번호 하나를 발급해 최초 계정의 웹 가입을 마친 뒤 서버 셸에서
+1회용 owner 자리를 승격한다. 이후 현 회장 서지선을 초대해 가입을 마치고 president로 임명한다.
+아래 이메일은 실제 가입 이메일로 바꾸며, 통과번호 평문은 파일이나 로그에 기록하지 않는다.
+
+```sh
+docker compose exec api dajung invite create --note "운하"
+# Complete web signup as owner@example.com. · owner@example.com으로 웹 가입 완료
+docker compose exec api dajung owner claim owner@example.com
+docker compose exec api dajung invite create --note "서지선"
+# Complete web signup as president@example.com. · president@example.com으로 웹 가입 완료
+docker compose exec api dajung president set president@example.com
+```
+
 ## Notes · 참고
 
 **EN** — Internal design docs and all club data are intentionally not in this repository. Permission filtering is enforced at retrieval time and re-checked in process; the regression suite (`api/tests/test_permission.py`) gates every merge.
