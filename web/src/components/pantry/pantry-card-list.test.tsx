@@ -43,13 +43,13 @@ describe("PantryCardList sort toggle (webapp-spec S17)", () => {
     const onSortChange = vi.fn();
     renderList("desc", onSortChange);
 
-    await user.click(screen.getByRole("button", { name: /내림차순/ }));
+    await user.click(screen.getByRole("button", { name: /^내림차순/ }));
     expect(onSortChange).toHaveBeenCalledWith("updated_at");
   });
 
   it("shows a down arrow when order is desc and an up arrow when order is asc", () => {
     const { rerender } = renderList("desc");
-    expect(screen.getByRole("button", { name: /내림차순/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^내림차순/ })).toBeInTheDocument();
 
     rerender(
       <PantryCardList
@@ -62,6 +62,6 @@ describe("PantryCardList sort toggle (webapp-spec S17)", () => {
         onAdd={vi.fn()}
       />,
     );
-    expect(screen.getByRole("button", { name: /오름차순/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^오름차순/ })).toBeInTheDocument();
   });
 });

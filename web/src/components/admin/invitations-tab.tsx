@@ -64,7 +64,7 @@ export function InvitationsTab() {
     setBusy(true);
     setActionError(null);
     try {
-      const created = await issue(note, Number(days) || DEFAULT_DAYS);
+      const created = await issue(note, Math.max(1, Math.floor(Number(days)) || DEFAULT_DAYS));
       setIssuedCode(created.code);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : ACTION_ERROR_FALLBACK);

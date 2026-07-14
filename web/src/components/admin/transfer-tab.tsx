@@ -177,6 +177,8 @@ export function TransferTab({
               <div className="rounded-lg border border-semantic-error bg-semantic-error-soft p-3 text-body-sm text-semantic-error">
                 {viewerRole === "president"
                   ? "이양 즉시 본인의 관리자 권한이 사라집니다. 계속하려면 아래 확인 버튼을 다시 눌러 주세요."
+                  : president === null
+                    ? "임명 즉시 해당 운영진이 관리자(회장) 권한을 갖습니다. 계속하려면 아래 확인 버튼을 다시 눌러 주세요."
                   : "이양 즉시 기존 회장의 관리자 권한이 사라집니다. 계속하려면 아래 확인 버튼을 다시 눌러 주세요."}
               </div>
             )}
