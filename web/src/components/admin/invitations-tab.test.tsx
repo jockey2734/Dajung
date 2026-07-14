@@ -62,4 +62,23 @@ describe("InvitationsTab one-time code (webapp-spec S21)", () => {
     );
     expect(issuePosts).toHaveLength(1);
   });
+
+  it("clamps a negative validity period before issuing", async () => {
+    const user = userEvent.setup();
+    render(<InvitationsTab />);
+
+    await user.click(await screen.findByRole("button", { name: "통과번호 발급" }));
+    const daysInput = screen.getByLabelText("유효 기간 (일)");
+    await user.clear(daysInput);
+    await user.type(daysInput, "-2");
+    await user.click(screen.getByRole("button", { name: "발급" }));
+    await screen.findByText("PLAINTEXT-CODE-1");
+
+    const issueCall = fetchMock.mock.calls.find(
+      ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+    );
+    expect(issueCall).toBeDefined();
+    const body = JSON.parse(String((issueCall?.[1] as RequestInit).body));
+    expect(body.days).toBe(1);
+  });
 });

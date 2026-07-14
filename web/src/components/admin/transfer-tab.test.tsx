@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { AdminUserOut } from "@/types/admin";
+import type { AdminUserOut, PresidentUserOut } from "@/types/admin";
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -27,11 +27,23 @@ const staffUser: AdminUserOut = {
   must_change_password: false,
 };
 
-function renderTab(onTransfer = vi.fn().mockResolvedValue(undefined)) {
+const presidentUser: PresidentUserOut = {
+  id: "president-1",
+  name: "현재 회장",
+  email: "president@example.com",
+  title: "회장",
+  role: "president",
+  expires_at: "2027-01-01T00:00:00Z",
+};
+
+function renderTab(
+  president: PresidentUserOut | null = presidentUser,
+  onTransfer = vi.fn().mockResolvedValue(undefined),
+) {
   render(
     <TransferTab
       viewerRole="owner"
-      president={null}
+      president={president}
       users={[staffUser]}
       transfers={[]}
       onTransfer={onTransfer}
@@ -70,5 +82,20 @@ describe("TransferTab double confirm (webapp-spec S20)", () => {
     await user.selectOptions(screen.getByLabelText("차기 회장"), "");
     expect(screen.queryByRole("button", { name: "권한 이양 확인" })).not.toBeInTheDocument();
     expect(onTransfer).not.toHaveBeenCalled();
+  });
+
+  it("describes an initial appointment when no president exists", async () => {
+    const user = userEvent.setup();
+    renderTab(null);
+
+    await user.click(screen.getByRole("button", { name: "권한 이양" }));
+    await user.selectOptions(screen.getByLabelText("차기 회장"), "staff-1");
+    await user.click(screen.getByRole("button", { name: "권한 이양" }));
+
+    expect(
+      screen.getByText(
+        "임명 즉시 해당 운영진이 관리자(회장) 권한을 갖습니다. 계속하려면 아래 확인 버튼을 다시 눌러 주세요.",
+      ),
+    ).toBeInTheDocument();
   });
 });
