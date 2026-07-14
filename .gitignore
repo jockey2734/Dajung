@@ -62,3 +62,11 @@ pyvenv.cfg
 # Agent worktrees — never track.
 # 에이전트 워크트리 — 추적 금지.
 .claude/worktrees/
+
+# Stray club files dropped at repo root — real data belongs under data/ (CLAUDE.md §5.3).
+# 루트에 실수로 놓인 실자료 가드 — 실제 자료는 data/ 아래에만 (CLAUDE.md §5.3).
+/*.pdf
+/*.xlsx
+/*.docx
+/*.hwp
+/*.csv
