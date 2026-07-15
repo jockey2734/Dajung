@@ -31,7 +31,7 @@ router: ## 라우터 모델 받기 (최초 1회)
 
 ## ── 통과번호 (가입 게이트, 서버에서) ─────────────────────────────────────
 
-invite: ## 통과번호 발급: make invite NOTE="채민" [DAYS=7]
+invite: ## 통과번호 발급: make invite NOTE="서지선" [DAYS=7]
 	docker compose exec api dajung invite create --note "$(NOTE)" --days $(or $(DAYS),7)
 
 invites: ## 통과번호 목록·상태
