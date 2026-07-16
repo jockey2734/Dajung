@@ -1,4 +1,7 @@
-"""Bounded chat-history formatting for graph prompts."""
+"""Bounded chat-history formatting for graph prompts.
+
+그래프 프롬프트용 제한 대화 기록 포맷 테스트.
+"""
 
 from __future__ import annotations
 

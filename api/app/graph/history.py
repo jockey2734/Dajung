@@ -1,4 +1,7 @@
-"""Bounded same-session history for graph prompts."""
+"""Bounded same-session history for graph prompts.
+
+그래프 프롬프트용으로 제한한 같은 세션 대화 기록.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +23,10 @@ def _truncate_content(content: str) -> str:
 
 
 def truncate_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Apply the newest-message, per-message, and total-content limits."""
+    """Apply the newest-message, per-message, and total-content limits.
+
+    최신 메시지 수, 메시지별 길이, 전체 내용 길이 상한을 적용한다.
+    """
     if settings.history_max_messages <= 0:
         return []
     bounded = [
@@ -34,7 +40,10 @@ def truncate_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
 
 
 def format_history(history: list[dict[str, str]]) -> str:
-    """Render bounded history as context that is explicitly not a citation source."""
+    """Render bounded history as context that is explicitly not a citation source.
+
+    제한된 기록을 인용 출처가 아닌 맥락 블록으로 렌더링한다.
+    """
     bounded = truncate_history(history)
     if not bounded:
         return ""
@@ -49,13 +58,19 @@ def format_history(history: list[dict[str, str]]) -> str:
 
 
 def prepend_history(text: str, history: list[dict[str, str]]) -> str:
-    """Prepend the optional history block to current-turn prompt text."""
+    """Prepend the optional history block to current-turn prompt text.
+
+    선택적인 기록 블록을 현재 턴 프롬프트 앞에 붙인다.
+    """
     block = format_history(history)
     return f"{block}\n\n{text}" if block else text
 
 
 def latest_user_question(history: list[dict[str, str]]) -> str | None:
-    """Return the newest prior user message collapsed to one line."""
+    """Return the newest prior user message collapsed to one line.
+
+    가장 최근의 이전 사용자 메시지를 한 줄로 합쳐 반환한다.
+    """
     for item in reversed(truncate_history(history)):
         if item["role"] == "user":
             question = " ".join(item["content"].split())
