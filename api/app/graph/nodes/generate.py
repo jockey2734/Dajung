@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from api.app.core.config import settings
+from api.app.graph.history import prepend_history
 from api.app.graph.state import State
 from api.app.llm.anthropic_client import answer_system_blocks, complete
 from api.app.rag.answer import build_context, pick_model
@@ -28,10 +29,11 @@ def generate_node(state: State) -> dict[str, Any]:
         return {"answer": _NO_SOURCE_ANSWER, "model_used": "none"}
 
     model = pick_model("knowledge", state["query"], len(reranked))
+    user_text = f"질문: {state['query']}\n\n자료:\n{build_context(reranked)}"
     answer = complete(
         model=model,
         system_blocks=answer_system_blocks(state.get("user_memory")),
-        user_text=f"질문: {state['query']}\n\n자료:\n{build_context(reranked)}",
+        user_text=prepend_history(user_text, state.get("history", [])),
         max_tokens=settings.max_tokens_generate,
     )
     return {"answer": answer, "model_used": model}

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from api.app.graph.history import prepend_history
 from api.app.graph.state import State
 
 CLARIFY_MESSAGE = (
@@ -24,4 +25,5 @@ def clarify_node(state: State) -> dict[str, Any]:
     고정 되묻기 문구를 답변으로 반환한다.
     """
     assert "query" in state
-    return {"answer": CLARIFY_MESSAGE, "model_used": "none", "citations": []}
+    answer = prepend_history(CLARIFY_MESSAGE, state.get("history", []))
+    return {"answer": answer, "model_used": "none", "citations": []}

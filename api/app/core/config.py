@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     upload_max_file_bytes: int = 20 * 1024 * 1024
     upload_max_files: int = 5
     attachment_max_chars: int = 12000
+    # Same-session prompt context bounds (webapp-spec S24).
+    # 같은 세션 프롬프트 맥락 상한 (webapp-spec S24).
+    history_max_messages: int = 10
+    history_message_max_chars: int = 500
+    history_total_max_chars: int = 4000
     # Weekly user-memory batch input/output bounds (webapp-spec S6).
     # 주간 사용자 메모리 배치 입력/출력 한계 (webapp-spec S6).
     memory_input_chars: int = 30000

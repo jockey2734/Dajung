@@ -70,6 +70,32 @@ async def test_ollama_down_keyword_fallback(monkeypatch: pytest.MonkeyPatch) -> 
     assert out["route"] == Route.KNOWLEDGE_QUERY
 
 
+async def test_router_prompt_includes_only_latest_user_question(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    async def fake_chat(*args: object, **kwargs: object) -> str:
+        messages = kwargs["messages"]
+        assert isinstance(messages, list)
+        captured["prompt"] = messages[0]["content"]
+        return '{"route": "knowledge_query"}'
+
+    monkeypatch.setattr(router_mod._client, "chat", fake_chat)
+    state = _state("그건 어떻게 해?")
+    state["history"] = [
+        {"role": "user", "content": "오래된 질문"},
+        {"role": "assistant", "content": "직전 답변"},
+        {"role": "user", "content": "가장 최근\n질문"},
+    ]
+
+    await router_mod.router_node(state)
+
+    assert "직전 질문: 가장 최근 질문" in captured["prompt"]
+    assert "오래된 질문" not in captured["prompt"]
+    assert "직전 답변" not in captured["prompt"]
+
+
 def test_parse_router_json_pure() -> None:
     assert router_mod.parse_router_json('{"route": "unclear"}')["route"] == "unclear"
     assert router_mod.parse_router_json("garbage") == {}

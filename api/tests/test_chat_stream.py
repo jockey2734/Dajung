@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -65,6 +66,48 @@ class FakeGraph:
 
 def _override_graph(app: Any, *updates: dict[str, Any]) -> None:
     app.dependency_overrides[chat_mod.get_graph] = lambda: FakeGraph(*updates)
+
+
+def _capture_graph_states(app: Any) -> list[dict[str, Any]]:
+    states: list[dict[str, Any]] = []
+
+    class CapturingGraph(FakeGraph):
+        async def astream(
+            self, state: Any, config: Any, stream_mode: str
+        ) -> AsyncIterator[dict[str, Any]]:
+            states.append(dict(state))
+            async for update in super().astream(state, config, stream_mode):
+                yield update
+
+    app.dependency_overrides[chat_mod.get_graph] = lambda: CapturingGraph(*_HAPPY)
+    return states
+
+
+async def _seed_chat_session(
+    factory: async_sessionmaker[AsyncSession],
+    user: User,
+    messages: list[dict[str, Any]],
+) -> uuid.UUID:
+    async with factory() as session:
+        chat = ChatSession(user_id=user.id, title="합성 대화", status="active", meta={})
+        session.add(chat)
+        await session.flush()
+        for sequence_no, values in enumerate(messages, start=1):
+            role = str(values["role"])
+            session.add(
+                Message(
+                    session_id=chat.id,
+                    user_id=user.id if role == "user" else None,
+                    role=role,
+                    content=str(values["content"]),
+                    sequence_no=sequence_no,
+                    status=str(values.get("status", "completed")),
+                    deleted_at=values.get("deleted_at"),
+                )
+            )
+        chat.message_count = len(messages)
+        await session.commit()
+        return chat.id
 
 
 _HAPPY = (
@@ -201,6 +244,84 @@ async def test_user_memory_added_to_graph_state(
 
     assert resp.status_code == 200
     assert seen_states[0]["user_memory"] == "- 인수인계 문서를 자주 확인함"
+
+
+async def test_history_window_is_chronological_and_excludes_current_turn(
+    api_harness: ApiHarness,
+) -> None:
+    client, factory, app = api_harness
+    user, headers = await _seed_user(factory)
+    session_id = await _seed_chat_session(
+        factory,
+        user,
+        [
+            {
+                "role": "user" if index % 2 else "assistant",
+                "content": f"history-{index:02d}",
+            }
+            for index in range(1, 12)
+        ],
+    )
+    seen_states = _capture_graph_states(app)
+
+    response = await client.post(
+        "/chat/stream",
+        json={"query": "current-turn", "session_id": str(session_id)},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert [item["content"] for item in seen_states[0]["history"]] == [
+        f"history-{index:02d}" for index in range(2, 12)
+    ]
+    assert all(item["content"] != "current-turn" for item in seen_states[0]["history"])
+
+
+async def test_history_excludes_other_session_deleted_and_incomplete_assistant(
+    api_harness: ApiHarness,
+) -> None:
+    client, factory, app = api_harness
+    user, headers = await _seed_user(factory)
+    session_id = await _seed_chat_session(
+        factory,
+        user,
+        [
+            {"role": "user", "content": "keep-user-any-status", "status": "failed"},
+            {"role": "assistant", "content": "drop-failed", "status": "failed"},
+            {"role": "assistant", "content": "keep-completed"},
+            {
+                "role": "user",
+                "content": "drop-deleted",
+                "deleted_at": datetime.now(UTC),
+            },
+            {"role": "assistant", "content": "drop-streaming", "status": "streaming"},
+        ],
+    )
+    await _seed_chat_session(factory, user, [{"role": "user", "content": "drop-other"}])
+    seen_states = _capture_graph_states(app)
+
+    response = await client.post(
+        "/chat/stream",
+        json={"query": "follow-up", "session_id": str(session_id)},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert seen_states[0]["history"] == [
+        {"role": "user", "content": "keep-user-any-status"},
+        {"role": "assistant", "content": "keep-completed"},
+    ]
+
+
+async def test_new_session_omits_empty_history_key(api_harness: ApiHarness) -> None:
+    client, factory, app = api_harness
+    _, headers = await _seed_user(factory)
+    seen_states = _capture_graph_states(app)
+
+    response = await client.post("/chat/stream", json={"query": "first-turn"}, headers=headers)
+
+    assert response.status_code == 200
+    assert "history" not in seen_states[0]
 
 
 async def test_done_remaining_reflects_current_turn(
