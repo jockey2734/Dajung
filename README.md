@@ -26,7 +26,7 @@ prompts/    scripts/    docker/ compose/
 data/       # local only, gitignored — real club documents
 ```
 
-## Quickstart · 빠른 시작
+## Local development · 로컬 개발
 
 ```sh
 uv sync
@@ -41,7 +41,21 @@ uv run pytest                   # quality gate (external services excluded)
 cp .env.example .env              # fill secrets and PUBLIC_HOST before production
 docker compose config             # validate caddy-only public ports and env wiring
 docker compose up -d --build       # run on the server after docs/SECURITY.md §5.7 gates
+make dry DIR=data/knowledge        # parse without Qdrant upserts · Qdrant 업서트 없이 파싱
+make ingest DIR=data/knowledge     # index from inside the API container · API 컨테이너에서 인덱싱
+make stats                         # inspect the server index · 서버 인덱스 통계
+make ask Q="개완 우리는 법"        # ask through the server stack · 서버 스택으로 질문
 ```
+
+**EN** — Compose bind-mounts the host `./data` directory read-write at `/app/data` in the
+API container. Admin uploads, recoverable `.trash` moves, and `.ingest_manifest.json` therefore
+remain on the host across API restarts. The `make` RAG commands require the Compose stack; use
+the host `uv run dajung ...` commands above for local development.
+
+**KO** — Compose는 호스트 `./data`를 API 컨테이너의 `/app/data`에 읽기·쓰기 방식으로
+마운트한다. 따라서 관리자 업로드, 복구 가능한 `.trash` 이동, `.ingest_manifest.json`은
+API 재시작 후에도 호스트에 남는다. `make` RAG 명령은 Compose 스택이 필요하며 로컬 개발은
+위의 호스트 `uv run dajung ...` 명령을 사용한다.
 
 ### First administrator · 최초 관리자
 

@@ -1,10 +1,10 @@
 # Dajung Ark — operator shortcuts over docker compose / uv / dajung CLI.
 # 다정 Ark — docker compose / uv / dajung CLI 단축 명령. 상세: ~/CLI.md
 #
-# Server ops need the compose stack up (make up). Local dev commands (ingest/
-# ask/stats/test/lint) run via uv on the host.
-# 서버 명령은 compose 기동(make up) 후 사용. 로컬 개발 명령(ingest/ask/stats/
-# test/lint)은 호스트 uv로 실행한다.
+# Server ops need the compose stack up (make up). RAG commands run inside the
+# API container; local development and quality commands use uv on the host.
+# 서버 명령은 compose 기동(make up) 후 사용. RAG 명령은 API 컨테이너에서,
+# 로컬 개발과 품질 명령은 호스트 uv로 실행한다.
 
 .DEFAULT_GOAL := help
 .PHONY: help up down ps logs router invite invites revoke ingest dry ask stats test lint web-test check
@@ -41,20 +41,20 @@ revoke: ## 통과번호 폐기: make revoke ID=1a2b3c4d
 	@test -n "$(ID)" || (echo 'usage: make revoke ID=<ID 앞 8자>'; exit 1)
 	docker compose exec api dajung invite revoke $(ID)
 
-## ── RAG (로컬 uv) ────────────────────────────────────────────────────────
+## ── RAG (서버 API 컨테이너) ──────────────────────────────────────────────
 
 ingest: ## 인덱싱: make ingest [DIR=data/knowledge]
-	uv run dajung ingest $(or $(DIR),data/knowledge)
+	docker compose exec api dajung ingest $(or $(DIR),data/knowledge)
 
 dry: ## 인덱싱 예행연습(업서트 없음): make dry [DIR=data]
-	uv run dajung ingest $(or $(DIR),data) --dry-run
+	docker compose exec api dajung ingest $(or $(DIR),data) --dry-run
 
 ask: ## 터미널 질문: make ask Q="개완 우리는 법"
 	@test -n "$(Q)" || (echo 'usage: make ask Q="질문"'; exit 1)
-	uv run dajung ask "$(Q)"
+	docker compose exec api dajung ask "$(Q)"
 
 stats: ## 인덱스 통계
-	uv run dajung stats
+	docker compose exec api dajung stats
 
 ## ── 품질 게이트 (CI와 동일) ──────────────────────────────────────────────
 
