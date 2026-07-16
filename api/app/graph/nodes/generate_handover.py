@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from api.app.core.config import settings
+from api.app.graph.history import prepend_history
 from api.app.graph.state import State
 from api.app.llm.anthropic_client import answer_system_blocks, complete
 from api.app.rag.answer import build_context
@@ -35,12 +36,13 @@ def generate_handover(state: State) -> dict[str, Any]:
 
     role_hint = state.get("role_hint")
     role_line = f"질문자 직책: {role_hint}\n" if role_hint else ""
+    user_text = (
+        f"{_FORMAT}\n\n{role_line}질문: {state['query']}\n\n자료:\n{build_context(reranked)}"
+    )
     answer = complete(
         model=settings.model_sonnet,
         system_blocks=answer_system_blocks(state.get("user_memory")),
-        user_text=(
-            f"{_FORMAT}\n\n{role_line}질문: {state['query']}\n\n자료:\n{build_context(reranked)}"
-        ),
+        user_text=prepend_history(user_text, state.get("history", [])),
         max_tokens=settings.max_tokens_generate,
     )
     return {"answer": answer, "model_used": settings.model_sonnet}

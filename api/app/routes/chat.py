@@ -19,7 +19,7 @@ from typing import Annotated, Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sse_starlette.sse import EventSourceResponse
 
 from api.app.core.config import settings
@@ -28,6 +28,7 @@ from api.app.core.errors import ApiError
 from api.app.core.logging import get_logger
 from api.app.core.pii import mask_pii
 from api.app.db.models import Attachment, ChatSession, Message, ModelRun, RetrievalEvent, UserMemory
+from api.app.graph.history import truncate_history
 from api.app.graph.state import Route, State
 from api.app.schemas.chat import ChatStreamRequest
 
@@ -161,6 +162,27 @@ async def _load_user_memory(session: Any, user_id: uuid.UUID) -> str | None:
     return str(memory.content)
 
 
+async def _load_history(
+    session: Any, session_id: uuid.UUID, before_sequence_no: int
+) -> list[dict[str, str]]:
+    result = await session.execute(
+        select(Message.role, Message.content)
+        .where(
+            Message.session_id == session_id,
+            Message.sequence_no < before_sequence_no,
+            Message.role.in_(("user", "assistant")),
+            Message.deleted_at.is_(None),
+            or_(Message.role == "user", Message.status == "completed"),
+        )
+        .order_by(Message.sequence_no.desc())
+        .limit(settings.history_max_messages)
+    )
+    rows = result.all()
+    return truncate_history(
+        [{"role": str(row.role), "content": str(row.content)} for row in reversed(rows)]
+    )
+
+
 def _attachment_context(attachments: list[Attachment]) -> str:
     if not attachments:
         return ""
@@ -227,6 +249,7 @@ async def chat_stream(
     chat.attachment_count += len(attachments)
     chat.last_message_at = now
     await session.commit()
+    history = await _load_history(session, chat.id, user_seq)
 
     attachment_context = _attachment_context(attachments)
     graph_query = f"{body.query}\n\n{attachment_context}" if attachment_context else body.query
@@ -236,6 +259,8 @@ async def chat_stream(
     }
     if user_memory is not None:
         state["user_memory"] = user_memory
+    if history:
+        state["history"] = history
     if body.route != "auto":
         state["route"] = Route(f"{body.route}_query")
 

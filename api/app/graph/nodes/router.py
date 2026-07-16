@@ -15,6 +15,7 @@ from typing import Any
 
 from api.app.core.config import settings
 from api.app.core.logging import get_logger
+from api.app.graph.history import latest_user_question
 from api.app.graph.state import Route, State
 from api.app.llm.ollama_client import OllamaClient
 
@@ -43,7 +44,7 @@ JSON 형식으로 응답:
   "학기 초에 뭐부터" 류의 다문서 종합 질문
 - unclear: 위 둘 다 확신 없음 → 시스템이 되묻는다
 
-질문: {query}
+{previous_question_line}질문: {query}
 """
 
 
@@ -95,11 +96,22 @@ async def router_node(state: State) -> dict[str, Any]:
     backend = "local"
 
     try:
+        previous_question = latest_user_question(state.get("history", []))
+        previous_question_line = (
+            f"직전 질문: {previous_question}\n" if previous_question is not None else ""
+        )
         async with _gpu_lock:
             raw = await asyncio.wait_for(
                 _client.chat(
                     model=settings.router_model,
-                    messages=[{"role": "user", "content": ROUTER_PROMPT.format(query=query)}],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": ROUTER_PROMPT.format(
+                                query=query, previous_question_line=previous_question_line
+                            ),
+                        }
+                    ],
                     format="json",
                 ),
                 timeout=settings.router_timeout_s,
