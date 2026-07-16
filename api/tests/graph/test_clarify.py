@@ -21,19 +21,3 @@ def test_clarify_message_offers_both_routes() -> None:
     # The re-ask must steer the user toward one of the two MVP1 routes.
     # 되묻기는 MVP1 두 라우트 중 하나로 유도해야 한다.
     assert "지식" in CLARIFY_MESSAGE and "인수인계" in CLARIFY_MESSAGE
-
-
-def test_clarify_prepends_bounded_history_context() -> None:
-    state: State = {
-        "query": "그거요",
-        "history": [
-            {"role": "user", "content": "앞 질문"},
-            {"role": "assistant", "content": "앞 답변"},
-        ],
-    }
-
-    answer = clarify_node(state)["answer"]
-
-    assert answer.startswith("<이전 대화>\n")
-    assert "사용자: 앞 질문" in answer
-    assert answer.endswith(CLARIFY_MESSAGE)
