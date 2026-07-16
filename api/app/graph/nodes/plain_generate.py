@@ -1,4 +1,7 @@
-"""Explicit ungrounded general-knowledge fallback generation."""
+"""Explicit ungrounded general-knowledge fallback generation.
+
+명시적으로 선택한 무근거 일반 지식 폴백 생성.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +16,10 @@ PLAIN_DISCLAIMER = "(동아리 자료·웹 근거 없음 — 일반 지식 답�
 
 
 def plain_generate_node(state: State) -> dict[str, Any]:
-    """Generate without document or web evidence after explicit choice."""
+    """Generate without document or web evidence after explicit choice.
+
+    사용자의 명시적 선택 뒤 문서나 웹 근거 없이 답한다.
+    """
     assert "query" in state
     user_text = prepend_history(f"질문: {state['query']}", state.get("history", []))
     answer = complete(

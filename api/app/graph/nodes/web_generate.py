@@ -1,4 +1,7 @@
-"""Explicit Anthropic web-search fallback generation."""
+"""Explicit Anthropic web-search fallback generation.
+
+명시적으로 선택한 Anthropic 웹 검색 폴백 생성.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +19,10 @@ WEB_DISCLAIMER = "(웹 검색 결과 — 동아리 내부 자료 아님)"
 
 
 def web_generate_node(state: State) -> dict[str, Any]:
-    """Generate from public web results after explicit user consent."""
+    """Generate from public web results after explicit user consent.
+
+    사용자의 명시적 동의 뒤 공개 웹 결과로 답한다.
+    """
     assert "query" in state
     user_text = prepend_history(f"질문: {state['query']}", state.get("history", []))
     answer, citations = complete_with_web_search(

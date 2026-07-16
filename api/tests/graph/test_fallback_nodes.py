@@ -1,4 +1,7 @@
-"""Consent offer and direct web/plain generation nodes."""
+"""Consent offer and direct web/plain generation nodes.
+
+동의 제안과 웹/일반 답변 직접 생성 노드.
+"""
 
 from __future__ import annotations
 

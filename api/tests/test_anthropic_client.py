@@ -1,4 +1,7 @@
-"""Anthropic web-search adapter contract with a fake SDK client."""
+"""Anthropic web-search adapter contract with a fake SDK client.
+
+가짜 SDK 클라이언트로 검증하는 Anthropic 웹 검색 어댑터 계약.
+"""
 
 from __future__ import annotations
 

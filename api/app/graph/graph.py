@@ -30,7 +30,10 @@ _APP: Any = None
 
 
 def route_graph_entry(state: State) -> str:
-    """Select RAG, web, or plain entry without touching retrieval."""
+    """Select RAG, web, or plain entry without touching retrieval.
+
+    검색을 실행하지 않고 RAG, 웹, 일반 답변 진입점을 선택한다.
+    """
     mode = state.get("mode", "rag")
     return {"web": "web_generate", "plain": "plain_generate"}.get(mode, "router")
 
