@@ -36,14 +36,17 @@ def rerank_node(state: State) -> dict[str, Any]:
     route = state["route"]
 
     top = float(reranked[0]["rerank_score"]) if reranked else 0.0
-    if top < settings.rerank_threshold and retries < settings.max_retries:
-        # Retry via the ORIGINAL route's retrieve node — keeps its filters.
-        # 원래 route의 retrieve로 재시도 — 필터가 유지된다.
-        return {
-            "reranked": reranked,
-            "retries": retries + 1,
-            "route_after": _RETRIEVE_FOR.get(route, "retrieve_knowledge"),
-        }
+    if top < settings.rerank_threshold:
+        if retries < settings.max_retries:
+            # Retry via the ORIGINAL route's retrieve node — keeps its filters.
+            # 원래 route의 retrieve로 재시도 — 필터가 유지된다.
+            return {
+                "reranked": reranked,
+                "retries": retries + 1,
+                "route_after": _RETRIEVE_FOR.get(route, "retrieve_knowledge"),
+            }
+        if route in _GENERATE_FOR:
+            return {"reranked": reranked, "route_after": "offer_web"}
     return {
         "reranked": reranked,
         "route_after": _GENERATE_FOR.get(route, "generate"),

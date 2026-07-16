@@ -16,14 +16,23 @@ from api.app.graph.nodes.cite import cite_node
 from api.app.graph.nodes.clarify import clarify_node
 from api.app.graph.nodes.generate import generate_node
 from api.app.graph.nodes.generate_handover import generate_handover
+from api.app.graph.nodes.offer_web import offer_web_node
 from api.app.graph.nodes.permission import permission_node
+from api.app.graph.nodes.plain_generate import plain_generate_node
 from api.app.graph.nodes.rerank import rerank_node, route_after_rerank
 from api.app.graph.nodes.retrieve_handover import retrieve_handover
 from api.app.graph.nodes.retrieve_knowledge import retrieve_knowledge
 from api.app.graph.nodes.router import router_node
+from api.app.graph.nodes.web_generate import web_generate_node
 from api.app.graph.state import Route, State
 
 _APP: Any = None
+
+
+def route_graph_entry(state: State) -> str:
+    """Select RAG, web, or plain entry without touching retrieval."""
+    mode = state.get("mode", "rag")
+    return {"web": "web_generate", "plain": "plain_generate"}.get(mode, "router")
 
 
 def build_graph() -> Any:
@@ -42,8 +51,18 @@ def build_graph() -> Any:
     graph.add_node("generate_handover", generate_handover)
     graph.add_node("clarify", clarify_node)
     graph.add_node("cite", cite_node)
+    graph.add_node("offer_web", offer_web_node)
+    graph.add_node("web_generate", web_generate_node)
+    graph.add_node("plain_generate", plain_generate_node)
 
-    graph.set_entry_point("router")
+    graph.set_conditional_entry_point(
+        route_graph_entry,
+        {
+            "router": "router",
+            "web_generate": "web_generate",
+            "plain_generate": "plain_generate",
+        },
+    )
     graph.add_conditional_edges(
         "router",
         lambda s: s["route"],
@@ -66,6 +85,7 @@ def build_graph() -> Any:
             "generate_handover": "generate_handover",
             "retrieve_knowledge": "retrieve_knowledge",
             "retrieve_handover": "retrieve_handover",
+            "offer_web": "offer_web",
         },
     )
 
@@ -73,6 +93,9 @@ def build_graph() -> Any:
     graph.add_edge("generate_handover", "cite")
     graph.add_edge("cite", END)
     graph.add_edge("clarify", END)
+    graph.add_edge("offer_web", END)
+    graph.add_edge("web_generate", END)
+    graph.add_edge("plain_generate", END)
 
     # PostgresSaver replaces MemorySaver in the serving phase (P3).
     # 서빙 단계(P3)에서 MemorySaver를 PostgresSaver로 교체한다.

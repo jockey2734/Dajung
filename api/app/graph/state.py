@@ -6,7 +6,7 @@ MVP1용 LangGraph 상태·라우트 정의 (Dajung.md §8.13).
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 
 class Route(StrEnum):
@@ -23,6 +23,7 @@ class Route(StrEnum):
 class State(TypedDict, total=False):
     query: str
     user: dict[str, str]
+    mode: Literal["rag", "web", "plain"]
     route: Route
     role_hint: str | None
     semester_hint: str | None
@@ -38,3 +39,4 @@ class State(TypedDict, total=False):
     answer: str
     model_used: str
     citations: list[dict[str, Any]]
+    offer: Literal["web_search"]

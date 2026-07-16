@@ -32,6 +32,7 @@ def test_markers_mapped_in_order() -> None:
     state: State = {"answer": "규칙 확인 [2]. 명단 인계 [1]. 다시 [2].", "reranked": _reranked(3)}
     out = cite_node(state)
     assert [c["marker"] for c in out["citations"]] == [2, 1]
+    assert all(c["kind"] == "doc" for c in out["citations"])
     assert out["citations"][0]["source_file"] == "f1.md"
 
 

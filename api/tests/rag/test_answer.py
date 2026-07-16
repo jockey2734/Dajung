@@ -63,6 +63,7 @@ def test_citations_order_and_bounds() -> None:
     answer = "먼저 회칙을 확인한다 [2]. 그다음 명단 인계 [1]. 근거 없음 [9]. 반복 [2]."
     cites = citations_for(answer, _reranked())
     assert [c["marker"] for c in cites] == [2, 1]
+    assert all(c["kind"] == "doc" for c in cites)
     assert cites[0]["source_file"] == "f1.md"
 
 
