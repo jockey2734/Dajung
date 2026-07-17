@@ -2,8 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readChatSSEStream } from "@/lib/sse-parser";
-import type { AttachmentChip, ChatMessage, Citation, SessionSummary } from "@/lib/chat-types";
+import type { AttachmentChip, ChatMessage, Citation, FallbackMode, SessionSummary } from "@/lib/chat-types";
 import { isPersistedMessageId } from "@/lib/chat-types";
+
+// Mode turns skip router/rerank so no route event and no per-stage status
+// updates arrive (webapp-spec S27 stream-contract note) — show one fixed
+// label instead of the RAG stage labels.
+// mode 턴은 router/rerank를 건너뛰어 route 이벤트도 단계별 status도 오지
+// 않는다 (webapp-spec S27 스트림 계약 주의) — RAG 단계 라벨 대신 고정 라벨
+// 하나를 보여준다.
+const MODE_LABELS: Record<FallbackMode, string> = {
+  web: "웹에서 검색하고 있어요",
+  plain: "답변을 생성하고 있어요",
+};
 
 // Initial display before the first server `done.remaining` arrives.
 // 첫 서버 `done.remaining` 값이 오기 전 초기 표시값.
@@ -114,7 +125,31 @@ export function useChatStream() {
     if (!res.ok) return;
     const body = (await res.json()) as SessionDetailApiResponse;
     if (activeSessionIdRef.current !== sessionId) return;
-    setMessages(mapSessionMessages(body.messages));
+    setMessages((prev) => {
+      const next = mapSessionMessages(body.messages);
+      // The offer buttons are live-stream-only (webapp-spec S27), so
+      // mapSessionMessages never restores `offer` from metadata — but this
+      // internal id swap runs right after `done` and must not eat a
+      // just-offered turn's buttons. Carry the live turn's offer state (and
+      // its retryQuery, which holds the original question to resend) onto
+      // the refreshed last assistant row.
+      // 제안 버튼은 라이브 스트림 전용이라(webapp-spec S27)
+      // mapSessionMessages는 metadata에서 `offer`를 복원하지 않는다 — 그런데
+      // 이 내부 id 교체는 `done` 직후 실행되므로 방금 제안된 턴의 버튼을
+      // 지워버리면 안 된다. 라이브 턴의 offer 상태(와 재전송할 원 질문이 든
+      // retryQuery)를 새로고침된 마지막 assistant 행으로 옮긴다.
+      const prevLast = prev[prev.length - 1];
+      const nextLast = next[next.length - 1];
+      if (prevLast?.role === "assistant" && prevLast.offer && nextLast?.role === "assistant") {
+        next[next.length - 1] = {
+          ...nextLast,
+          offer: prevLast.offer,
+          offerConsumed: prevLast.offerConsumed,
+          retryQuery: prevLast.retryQuery,
+        };
+      }
+      return next;
+    });
   }, []);
 
   const patchMessageById = useCallback((id: string, patch: Partial<ChatMessage>) => {
@@ -148,7 +183,7 @@ export function useChatStream() {
   }, []);
 
   const sendMessage = useCallback(
-    async (text: string, attachmentIds: string[] = []) => {
+    async (text: string, attachmentIds: string[] = [], mode?: FallbackMode) => {
       const turnId = nextTurnId();
       const userMessageId = `${turnId}-user`;
       const assistantMessageId = `${turnId}-assistant`;
@@ -158,7 +193,7 @@ export function useChatStream() {
         { id: userMessageId, role: "user", content: text, status: "done" },
         { id: assistantMessageId, role: "assistant", content: "", status: "streaming", retryQuery: text },
       ]);
-      setRagLabel("질문을 분류하고 있어요");
+      setRagLabel(mode ? MODE_LABELS[mode] : "질문을 분류하고 있어요");
       setIsStreaming(true);
 
       const patchAssistant = (patch: Partial<ChatMessage>) =>
@@ -172,6 +207,9 @@ export function useChatStream() {
             query: text,
             session_id: activeSessionIdRef.current ?? undefined,
             attachment_ids: attachmentIds,
+            // Omitted for normal turns — the backend defaults to "rag".
+            // 일반 턴에서는 생략 — 백엔드 기본값이 "rag"다.
+            ...(mode ? { mode } : {}),
           }),
         });
 
@@ -195,7 +233,12 @@ export function useChatStream() {
               activeSessionIdRef.current = event.session_id;
               break;
             case "status":
-              setRagLabel(event.label);
+              // Mode turns only ever get the generic "routing" status even
+              // though they skip the router — keep the fixed mode label
+              // instead (webapp-spec S27 "진행표시 간소화").
+              // mode 턴은 router를 건너뛰는데도 범용 "routing" status만 오므로
+              // 고정 mode 라벨을 유지한다 (webapp-spec S27 "진행표시 간소화").
+              if (!mode) setRagLabel(event.label);
               break;
             case "route":
               patchAssistant({ route: event.route });
@@ -209,7 +252,7 @@ export function useChatStream() {
               patchAssistant({ citations: event.citations });
               break;
             case "done":
-              patchAssistant({ status: "done" });
+              patchAssistant({ status: "done", offer: event.offer });
               setRemaining(event.remaining);
               void loadSessions();
               void refreshMessages(event.session_id);
@@ -243,6 +286,27 @@ export function useChatStream() {
         const target = prev.find((m) => m.id === messageId);
         if (target?.retryQuery) void sendMessage(target.retryQuery);
         return prev;
+      });
+    },
+    [sendMessage],
+  );
+
+  // Offer button click (webapp-spec S27): resend the original question as a
+  // brand-new turn with the picked mode, and mark the offer consumed so both
+  // buttons disable immediately. Same read-inside-setMessages shape as
+  // `retry` above — the functional update doubles as the double-click guard
+  // (the second click sees offerConsumed already true and no-ops).
+  // 제안 버튼 클릭 (webapp-spec S27): 원 질문을 선택한 mode의 완전한 새 턴으로
+  // 재전송하고, offer를 소비 처리해 두 버튼을 즉시 비활성화한다. 위 `retry`와
+  // 같은 setMessages 내부 읽기 형태 — 함수형 업데이트가 더블클릭 가드를 겸한다
+  // (두 번째 클릭은 이미 true인 offerConsumed를 보고 아무것도 안 한다).
+  const acceptOffer = useCallback(
+    (messageId: string, mode: FallbackMode) => {
+      setMessages((prev) => {
+        const target = prev.find((m) => m.id === messageId);
+        if (!target?.offer || target.offerConsumed || !target.retryQuery) return prev;
+        void sendMessage(target.retryQuery, [], mode);
+        return prev.map((m) => (m.id === messageId ? { ...m, offerConsumed: true } : m));
       });
     },
     [sendMessage],
@@ -303,5 +367,6 @@ export function useChatStream() {
     sendMessage: sendWithAttachments,
     retry,
     setFeedback,
+    acceptOffer,
   };
 }

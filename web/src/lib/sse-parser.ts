@@ -50,7 +50,14 @@ export function parseSSEChunk(buffer: string): ParseResult {
   return { events, remainder };
 }
 
-export interface Citation {
+// Two citation shapes since S26: document citations from cite.py (kind:"doc",
+// but older persisted rows predate the field — absent kind means doc) and web
+// citations from web_generate.py (kind:"web", title+url only).
+// S26부터 인용은 두 형태: cite.py의 문서 인용(kind:"doc" — 다만 필드 도입 전
+// 저장분은 kind가 없으므로, 없으면 doc으로 간주)과 web_generate.py의 웹 인용
+// (kind:"web", title+url만).
+export interface DocCitation {
+  kind?: "doc";
   marker: number;
   source_file: string;
   locator: string;
@@ -58,6 +65,14 @@ export interface Citation {
   semester: string | null;
   snippet: string;
 }
+
+export interface WebCitation {
+  kind: "web";
+  title: string;
+  url: string;
+}
+
+export type Citation = DocCitation | WebCitation;
 
 // Mirrors api/app/routes/chat.py's event order exactly:
 // session? -> status* -> route -> token* -> citations -> done, or error.
@@ -69,7 +84,18 @@ export type ChatSSEEvent =
   | { type: "route"; route: string }
   | { type: "token"; text: string }
   | { type: "citations"; citations: Citation[] }
-  | { type: "done"; latency_ms: number; model_used: string; session_id: string; remaining: number }
+  | {
+      type: "done";
+      latency_ms: number;
+      model_used: string;
+      session_id: string;
+      remaining: number;
+      // Present only when the turn ended with a fallback offer (webapp-spec
+      // S26 — currently the only value is "web_search").
+      // 턴이 폴백 제안으로 끝났을 때만 존재 (webapp-spec S26 — 현재 유일한
+      // 값은 "web_search").
+      offer?: string;
+    }
   | { type: "error"; error: { code: string; message: string } };
 
 // Maps a raw SSE frame to the typed union above. Unknown event names are
@@ -99,6 +125,7 @@ export function toChatSSEEvent(raw: RawSSEEvent): ChatSSEEvent | null {
           model_used: String(data.model_used),
           session_id: String(data.session_id),
           remaining: Number(data.remaining),
+          ...(typeof data.offer === "string" ? { offer: data.offer } : {}),
         };
       case "error":
         return { type: "error", error: data.error as { code: string; message: string } };

@@ -238,4 +238,152 @@ describe("useChatStream", () => {
 
     expect(result.current.messages[0].myFeedback).toBe(null);
   });
+
+  // webapp-spec S27: the offer arrives on done and must survive the internal
+  // post-done id swap (refreshMessages) — but only for the live turn, never
+  // restored from session metadata.
+  // webapp-spec S27: 제안은 done으로 도착하고 done 직후 내부 id 교체
+  // (refreshMessages)를 견뎌야 한다 — 단 라이브 턴에서만, 세션 metadata
+  // 복원은 없다.
+  function offerTurnMocks(fetchMock: ReturnType<typeof vi.fn>) {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ sessions: [] }) })
+      .mockResolvedValueOnce(
+        streamResponse(
+          'event: session\ndata: {"session_id":"s1"}\n\n' +
+            'event: done\ndata: {"latency_ms":40,"model_used":"","session_id":"s1","remaining":12,"offer":"web_search"}\n\n',
+        ),
+      )
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ sessions: [] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "s1",
+          title: "t",
+          messages: [
+            {
+              id: "real-u1",
+              role: "user",
+              content: "원래 질문",
+              metadata: {},
+              created_at: "2026-01-01T00:00:00Z",
+              my_feedback: null,
+            },
+            {
+              id: "real-a1",
+              role: "assistant",
+              content: "문서 검색에 실패했습니다. 웹 검색을 시도해보시겠습니까?",
+              metadata: { route: "knowledge_query", offer: "web_search" },
+              created_at: "2026-01-01T00:00:01Z",
+              my_feedback: null,
+            },
+          ],
+        }),
+      });
+  }
+
+  it("keeps done.offer and the original question on the turn across the id swap", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    offerTurnMocks(fetchMock);
+
+    const { result } = renderHook(() => useChatStream());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/sessions"));
+
+    await act(async () => {
+      result.current.sendMessage("원래 질문");
+    });
+
+    await waitFor(() => {
+      const offered = result.current.messages.find((m) => m.id === "real-a1");
+      expect(offered?.offer).toBe("web_search");
+      expect(offered?.retryQuery).toBe("원래 질문");
+    });
+    // The rag turn's request body must not carry a mode field.
+    // rag 턴의 요청 바디에는 mode 필드가 없어야 한다.
+    const [, ragInit] = fetchMock.mock.calls.find(([url]) => url === "/api/chat/stream") as [
+      string,
+      { body: string },
+    ];
+    expect(JSON.parse(ragInit.body)).not.toHaveProperty("mode");
+  });
+
+  it("acceptOffer resends the original question as a new turn with the picked mode and consumes the offer", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    offerTurnMocks(fetchMock);
+
+    const { result } = renderHook(() => useChatStream());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/sessions"));
+
+    await act(async () => {
+      result.current.sendMessage("원래 질문");
+    });
+    await waitFor(() =>
+      expect(result.current.messages.find((m) => m.id === "real-a1")?.offer).toBe("web_search"),
+    );
+
+    // The follow-up turn errors out on purpose: the error path skips the
+    // refetch, so the consumed flag stays observable without racing it.
+    // 후속 턴은 일부러 에러로 끝낸다: 에러 경로는 재조회를 건너뛰므로 소비
+    // 플래그를 경합 없이 관찰할 수 있다.
+    fetchMock.mockResolvedValueOnce(
+      streamResponse('event: error\ndata: {"error":{"code":"llm_down","message":"오류"}}\n\n'),
+    );
+
+    await act(async () => {
+      result.current.acceptOffer("real-a1", "web");
+    });
+
+    const streamCalls = fetchMock.mock.calls.filter(([url]) => url === "/api/chat/stream");
+    expect(streamCalls).toHaveLength(2);
+    const body = JSON.parse((streamCalls[1][1] as { body: string }).body) as {
+      query: string;
+      mode: string;
+    };
+    expect(body.query).toBe("원래 질문");
+    expect(body.mode).toBe("web");
+    expect(result.current.messages.find((m) => m.id === "real-a1")?.offerConsumed).toBe(true);
+
+    // Second click is a no-op — the offer is already consumed.
+    // 두 번째 클릭은 no-op — 제안이 이미 소비됐다.
+    await act(async () => {
+      result.current.acceptOffer("real-a1", "plain");
+    });
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/chat/stream")).toHaveLength(2);
+  });
+
+  it("does not restore offer buttons when a session is re-opened (live-stream-only)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ sessions: [] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "s1",
+          title: "t",
+          messages: [
+            {
+              id: "real-a1",
+              role: "assistant",
+              content: "문서 검색에 실패했습니다. 웹 검색을 시도해보시겠습니까?",
+              metadata: { route: "knowledge_query", offer: "web_search" },
+              created_at: "2026-01-01T00:00:01Z",
+              my_feedback: null,
+            },
+          ],
+        }),
+      });
+
+    const { result } = renderHook(() => useChatStream());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/sessions"));
+
+    await act(async () => {
+      await result.current.selectSession("s1");
+    });
+
+    expect(result.current.messages[0].offer).toBeUndefined();
+  });
 });

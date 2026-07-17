@@ -24,6 +24,7 @@ export default function ChatPage() {
     sendMessage,
     retry,
     setFeedback,
+    acceptOffer,
   } = useChatStream();
 
   const [isDragging, setIsDragging] = useState(false);
@@ -82,7 +83,14 @@ export default function ChatPage() {
               onPickExample={(text) => setPrefill({ text })}
             />
           ) : (
-            <MessageList messages={messages} ragLabel={ragLabel} onRetry={retry} onFeedback={setFeedback} />
+            <MessageList
+              messages={messages}
+              ragLabel={ragLabel}
+              onRetry={retry}
+              onFeedback={setFeedback}
+              onAcceptOffer={acceptOffer}
+              offerLocked={isStreaming}
+            />
           )}
           <div ref={scrollAnchorRef} />
         </div>

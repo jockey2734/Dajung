@@ -89,6 +89,33 @@ describe("toChatSSEEvent", () => {
     ).toEqual({ type: "error", error: { code: "llm_down", message: "응답 생성 중 오류가 발생했습니다." } });
   });
 
+  it("passes done.offer through when present and omits it otherwise (webapp-spec S26/S27)", () => {
+    expect(
+      toChatSSEEvent({
+        event: "done",
+        data: '{"latency_ms":120,"model_used":"","session_id":"s1","remaining":17,"offer":"web_search"}',
+      }),
+    ).toEqual({ type: "done", latency_ms: 120, model_used: "", session_id: "s1", remaining: 17, offer: "web_search" });
+    expect(
+      toChatSSEEvent({
+        event: "done",
+        data: '{"latency_ms":120,"model_used":"claude-haiku-4-5","session_id":"s1","remaining":17}',
+      }),
+    ).not.toHaveProperty("offer");
+  });
+
+  it("maps kind:web citation items unchanged (webapp-spec S26/S27)", () => {
+    expect(
+      toChatSSEEvent({
+        event: "citations",
+        data: '{"citations":[{"kind":"web","title":"다도 소개","url":"https://example.com/tea"}]}',
+      }),
+    ).toEqual({
+      type: "citations",
+      citations: [{ kind: "web", title: "다도 소개", url: "https://example.com/tea" }],
+    });
+  });
+
   it("returns null for an unknown event name instead of throwing", () => {
     expect(toChatSSEEvent({ event: "future_event", data: "{}" })).toBeNull();
   });
