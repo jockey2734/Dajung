@@ -74,6 +74,7 @@ def citations_for(answer: str, reranked: list[dict[str, Any]]) -> list[dict[str,
         p = reranked[n - 1]["payload"]
         out.append(
             {
+                "kind": "doc",
                 "marker": n,
                 "source_file": p.get("source_file", ""),
                 "locator": p.get("locator", ""),

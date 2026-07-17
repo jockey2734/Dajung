@@ -24,6 +24,7 @@ def test_defaults_match_spec() -> None:
     assert s.history_max_messages == 10
     assert s.history_message_max_chars == 500
     assert s.history_total_max_chars == 4000
+    assert s.web_search_max_uses == 3
 
 
 def test_env_prefix_override(monkeypatch: pytest.MonkeyPatch) -> None:

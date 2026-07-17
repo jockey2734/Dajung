@@ -37,10 +37,10 @@ def test_low_score_first_try_retries_same_route(monkeypatch: pytest.MonkeyPatch)
     assert out["retries"] == 1
 
 
-def test_low_score_after_retry_generates(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_low_score_after_retry_offers_web(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_scores(monkeypatch, [0.3])
     out = rerank_mod.rerank_node(_state(Route.HANDOVER_QUERY, settings.max_retries))
-    assert out["route_after"] == "generate_handover"
+    assert out["route_after"] == "offer_web"
     assert "retries" not in out
 
 
@@ -50,12 +50,10 @@ def test_good_score_goes_straight_to_generate(monkeypatch: pytest.MonkeyPatch) -
     assert out["route_after"] == "generate"
 
 
-def test_empty_candidates_generate_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_empty_candidates_offer_web(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_scores(monkeypatch, [])
     out = rerank_mod.rerank_node(_state(Route.KNOWLEDGE_QUERY, settings.max_retries))
-    # Empty + retries exhausted → generate emits the honest no-source answer.
-    # 비었고 재시도 소진 → generate가 정직한 '자료 없음' 답변을 낸다.
-    assert out["route_after"] == "generate"
+    assert out["route_after"] == "offer_web"
     assert out["reranked"] == []
 
 

@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     history_max_messages: int = 10
     history_message_max_chars: int = 500
     history_total_max_chars: int = 4000
+    # Anthropic server-side web search cost/latency bound (webapp-spec S26).
+    # Anthropic 서버측 웹 검색 비용·지연 상한 (webapp-spec S26).
+    web_search_max_uses: int = 3
     # Weekly user-memory batch input/output bounds (webapp-spec S6).
     # 주간 사용자 메모리 배치 입력/출력 한계 (webapp-spec S6).
     memory_input_chars: int = 30000

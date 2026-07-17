@@ -68,7 +68,7 @@ def _override_graph(app: Any, *updates: dict[str, Any]) -> None:
     app.dependency_overrides[chat_mod.get_graph] = lambda: FakeGraph(*updates)
 
 
-def _capture_graph_states(app: Any) -> list[dict[str, Any]]:
+def _capture_graph_states(app: Any, *updates: dict[str, Any]) -> list[dict[str, Any]]:
     states: list[dict[str, Any]] = []
 
     class CapturingGraph(FakeGraph):
@@ -79,7 +79,7 @@ def _capture_graph_states(app: Any) -> list[dict[str, Any]]:
             async for update in super().astream(state, config, stream_mode):
                 yield update
 
-    app.dependency_overrides[chat_mod.get_graph] = lambda: CapturingGraph(*_HAPPY)
+    app.dependency_overrides[chat_mod.get_graph] = lambda: CapturingGraph(*(updates or _HAPPY))
     return states
 
 
@@ -122,7 +122,7 @@ _HAPPY = (
     {
         "cite": {
             "answer": "개완은 이렇게 씁니다. 연락처는 010-1234-5678 [1].",
-            "citations": [{"marker": 1}],
+            "citations": [{"kind": "doc", "marker": 1}],
         }
     },
 )
@@ -159,6 +159,7 @@ async def test_event_sequence_and_persistence(
     assert kinds.index("route") < kinds.index("token") < kinds.index("citations")
     done = next(d for e, d in events if e == "done")
     assert done["remaining"] == settings.daily_chat_limit - 1
+    assert "offer" not in done
     streamed_answer = "".join(data["text"] for event, data in events if event == "token")
     assert "010-1234-5678" not in streamed_answer
     assert "[전화]" in streamed_answer
@@ -178,7 +179,7 @@ async def test_event_sequence_and_persistence(
     assert "010-1234-5678" not in rows[1].content
     assert "[전화]" in rows[1].content
     assert rows[1].meta["route"] == "knowledge_query"
-    assert rows[1].meta["citations"] == [{"marker": 1}]
+    assert rows[1].meta["citations"] == [{"kind": "doc", "marker": 1}]
     assert rows[1].status == "completed"
     assert len(runs) == 1 and runs[0].message_id == rows[1].id
     assert len(retrievals) == 1 and retrievals[0].message_id == rows[1].id
@@ -352,7 +353,10 @@ async def test_done_remaining_reflects_current_turn(
     assert done["remaining"] == 1
 
 
-async def test_daily_limit_blocks(api_harness: ApiHarness, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("mode", ["rag", "web", "plain"])
+async def test_daily_limit_blocks_all_modes(
+    api_harness: ApiHarness, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
     client, factory, app = api_harness
     user, headers = await _seed_user(factory)
     _override_graph(app, *_HAPPY)
@@ -372,7 +376,7 @@ async def test_daily_limit_blocks(api_harness: ApiHarness, monkeypatch: pytest.M
         )
         await s.commit()
 
-    resp = await client.post("/chat/stream", json={"query": "한도?"}, headers=headers)
+    resp = await client.post("/chat/stream", json={"query": "한도?", "mode": mode}, headers=headers)
     assert resp.status_code == 429
     assert resp.json()["error"]["code"] == "daily_limit"
 
@@ -397,6 +401,117 @@ async def test_qdrant_down_503(api_harness: ApiHarness, monkeypatch: pytest.Monk
     resp = await client.post("/chat/stream", json={"query": "q"}, headers=headers)
     assert resp.status_code == 503
     assert resp.json()["error"]["code"] == "qdrant_down"
+
+
+async def test_offer_web_streams_and_persists_optional_offer(
+    api_harness: ApiHarness,
+) -> None:
+    client, factory, app = api_harness
+    _, headers = await _seed_user(factory)
+    offer_message = "문서 검색에 실패했습니다. 웹 검색을 시도해보시겠습니까?"
+    _override_graph(
+        app,
+        {"router": {"route": "knowledge_query", "retries": 0}},
+        {"rerank": {"reranked": [], "route_after": "offer_web"}},
+        {
+            "offer_web": {
+                "answer": offer_message,
+                "model_used": "none",
+                "offer": "web_search",
+                "citations": [],
+            }
+        },
+    )
+
+    response = await client.post("/chat/stream", json={"query": "없는 문서"}, headers=headers)
+
+    assert response.status_code == 200
+    events = _events(response.text)
+    assert "".join(data["text"] for event, data in events if event == "token") == offer_message
+    done = next(data for event, data in events if event == "done")
+    assert done["offer"] == "web_search"
+    async with factory() as session:
+        assistant = (
+            (await session.execute(select(Message).where(Message.role == "assistant")))
+            .scalars()
+            .one()
+        )
+    assert assistant.meta["offer"] == "web_search"
+    assert assistant.meta["citations"] == []
+
+
+async def test_web_mode_bypasses_qdrant_and_emits_web_citations(
+    api_harness: ApiHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, factory, app = api_harness
+    _, headers = await _seed_user(factory)
+    monkeypatch.setattr(chat_mod, "_qdrant_ready", lambda: False)
+    citations = [{"kind": "web", "title": "공식", "url": "https://example.test"}]
+    seen_states = _capture_graph_states(
+        app,
+        {
+            "web_generate": {
+                "answer": "(웹 검색 결과 — 동아리 내부 자료 아님)\n공개 답변",
+                "model_used": "claude-sonnet-5",
+                "citations": citations,
+            }
+        },
+    )
+
+    response = await client.post(
+        "/chat/stream",
+        json={"query": "원 질문", "mode": "web", "route": "handover"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert seen_states[0]["mode"] == "web"
+    assert "route" not in seen_states[0]
+    events = _events(response.text)
+    assert next(data for event, data in events if event == "citations") == {"citations": citations}
+    answer = "".join(data["text"] for event, data in events if event == "token")
+    assert answer.startswith("(웹 검색 결과 — 동아리 내부 자료 아님)\n")
+    async with factory() as session:
+        retrievals = (await session.execute(select(RetrievalEvent))).scalars().all()
+        assistant = (
+            (await session.execute(select(Message).where(Message.role == "assistant")))
+            .scalars()
+            .one()
+        )
+    assert retrievals == []
+    assert assistant.meta["citations"] == citations
+
+
+async def test_plain_mode_bypasses_qdrant_without_citations(
+    api_harness: ApiHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, factory, app = api_harness
+    _, headers = await _seed_user(factory)
+    monkeypatch.setattr(chat_mod, "_qdrant_ready", lambda: False)
+    seen_states = _capture_graph_states(
+        app,
+        {
+            "plain_generate": {
+                "answer": "(동아리 자료·웹 근거 없음 — 일반 지식 답변)\n일반 답변",
+                "model_used": "claude-sonnet-5",
+                "citations": [],
+            }
+        },
+    )
+
+    response = await client.post(
+        "/chat/stream", json={"query": "원 질문", "mode": "plain"}, headers=headers
+    )
+
+    assert response.status_code == 200
+    assert seen_states[0]["mode"] == "plain"
+    events = _events(response.text)
+    assert all(event != "citations" for event, _ in events)
+    answer = "".join(data["text"] for event, data in events if event == "token")
+    assert answer.startswith("(동아리 자료·웹 근거 없음 — 일반 지식 답변)\n")
+    async with factory() as session:
+        retrievals = (await session.execute(select(RetrievalEvent))).scalars().all()
+    assert retrievals == []
 
 
 async def test_graph_error_logs_failed_turn(

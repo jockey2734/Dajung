@@ -207,7 +207,7 @@ async def chat_stream(
             f"오늘 질문 한도({settings.daily_chat_limit}회)를 초과했습니다. "
             "내일 다시 이용해 주세요.",
         )
-    if not _qdrant_ready():
+    if body.mode == "rag" and not _qdrant_ready():
         raise ApiError(503, "qdrant_down", "검색 시스템에 연결할 수 없습니다.")
 
     attachments = await _load_attachments(session, current.id, body.attachment_ids)
@@ -256,12 +256,13 @@ async def chat_stream(
     state: State = {
         "query": graph_query,
         "user": {"id": str(current.id), "email": current.email, "role": current.role},
+        "mode": body.mode,
     }
     if user_memory is not None:
         state["user_memory"] = user_memory
     if history:
         state["history"] = history
-    if body.route != "auto":
+    if body.mode == "rag" and body.route != "auto":
         state["route"] = Route(f"{body.route}_query")
 
     session_id = chat.id
@@ -270,9 +271,10 @@ async def chat_stream(
         started = time.monotonic()
         answer = ""
         model_used = ""
-        route_value: str = body.route
+        route_value: str = body.route if body.mode == "rag" else body.mode
         citations: list[dict[str, Any]] = []
         reranked: list[dict[str, Any]] = []
+        offer = ""
         if is_new:
             yield _sse("session", {"session_id": str(session_id)})
         yield _sse("status", {"stage": "routing", "label": _STATUS_LABELS["routing"]})
@@ -293,15 +295,26 @@ async def chat_stream(
                             "status",
                             {"stage": "generating", "label": _STATUS_LABELS["generating"]},
                         )
-                    elif node in ("generate", "generate_handover", "clarify"):
+                    elif node in (
+                        "generate",
+                        "generate_handover",
+                        "clarify",
+                        "offer_web",
+                        "web_generate",
+                        "plain_generate",
+                    ):
                         answer = mask_pii(str(out.get("answer", "")))
                         model_used = str(out.get("model_used", ""))
+                        offer = str(out.get("offer", offer))
                         # Pseudo token stream — whole answers re-chunked; true
                         # token streaming lands with a streaming generate node.
                         # 유사 토큰 스트림 — 통째 답변 재분할. 진짜 스트리밍은
                         # generate 노드 스트리밍 전환 때.
                         for piece in _chunk_text(answer, settings.sse_chunk_chars):
                             yield _sse("token", {"text": piece})
+                        if node == "web_generate":
+                            citations = list(out.get("citations", []))
+                            yield _sse("citations", {"citations": citations})
                     elif node == "cite":
                         answer = mask_pii(str(out.get("answer", answer)))
                         citations = list(out.get("citations", []))
@@ -311,6 +324,14 @@ async def chat_stream(
             chat_row = await session.get(ChatSession, session_id)
             assert chat_row is not None
             seq = chat_row.message_count + 1
+            assistant_meta: dict[str, Any] = {
+                "route": route_value,
+                "model_used": model_used,
+                "citations": citations,
+                "latency_ms": latency_ms,
+            }
+            if offer:
+                assistant_meta["offer"] = offer
             assistant = Message(
                 session_id=session_id,
                 user_id=None,
@@ -318,12 +339,7 @@ async def chat_stream(
                 content=answer,
                 sequence_no=seq,
                 status="completed",
-                meta={
-                    "route": route_value,
-                    "model_used": model_used,
-                    "citations": citations,
-                    "latency_ms": latency_ms,
-                },
+                meta=assistant_meta,
             )
             session.add(assistant)
             await session.flush()
@@ -344,26 +360,27 @@ async def chat_stream(
             )
             session.add(model_run)
             await session.flush()
-            session.add(
-                RetrievalEvent(
-                    message_id=assistant.id,
-                    model_run_id=model_run.id,
-                    query_text=body.query,
-                    filters={"route": route_value},
-                    top_k=len(reranked),
-                    chunks=[
-                        {
-                            "doc_id": item.get("payload", {}).get("doc_id"),
-                            "chunk_id": item.get("payload", {}).get("chunk_index"),
-                            "score": item.get("rerank_score"),
-                            "rank": index + 1,
-                            "cited": False,
-                        }
-                        for index, item in enumerate(reranked)
-                    ],
-                    latency_ms=None,
+            if body.mode == "rag":
+                session.add(
+                    RetrievalEvent(
+                        message_id=assistant.id,
+                        model_run_id=model_run.id,
+                        query_text=body.query,
+                        filters={"route": route_value},
+                        top_k=len(reranked),
+                        chunks=[
+                            {
+                                "doc_id": item.get("payload", {}).get("doc_id"),
+                                "chunk_id": item.get("payload", {}).get("chunk_index"),
+                                "score": item.get("rerank_score"),
+                                "rank": index + 1,
+                                "cited": False,
+                            }
+                            for index, item in enumerate(reranked)
+                        ],
+                        latency_ms=None,
+                    )
                 )
-            )
             chat_row.message_count = seq
             chat_row.last_message_at = datetime.now(UTC)
             if is_new and answer:
@@ -379,15 +396,15 @@ async def chat_stream(
                 0,
                 settings.daily_chat_limit - await _today_user_count(session, current.id),
             )
-            yield _sse(
-                "done",
-                {
-                    "latency_ms": latency_ms,
-                    "model_used": model_used,
-                    "session_id": str(session_id),
-                    "remaining": remaining,
-                },
-            )
+            done_payload: dict[str, Any] = {
+                "latency_ms": latency_ms,
+                "model_used": model_used,
+                "session_id": str(session_id),
+                "remaining": remaining,
+            }
+            if offer:
+                done_payload["offer"] = offer
+            yield _sse("done", done_payload)
         except Exception as exc:
             # Never leak a traceback into the stream — map to §3 codes.
             # 스트림에 트레이스백을 흘리지 않는다 — §3 코드로 매핑.

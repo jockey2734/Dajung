@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 class ChatStreamRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     route: Literal["auto", "knowledge", "handover"] = "auto"
+    mode: Literal["rag", "web", "plain"] = "rag"
     # Continue an existing session; omit to start a new one (webapp-plan §7).
     # 기존 세션 이어가기. 생략하면 신규 생성 (webapp-plan §7).
     session_id: uuid.UUID | None = None
