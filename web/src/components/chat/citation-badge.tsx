@@ -1,12 +1,13 @@
 "use client";
 
 import { HoverCard as HoverCardPrimitive } from "radix-ui";
-import type { Citation } from "@/lib/chat-types";
+import type { DocCitation } from "@/lib/chat-types";
 
 // DESIGN.md citation-badge token: surface bg, mocha text, micro type, xs
 // rounded, hairline border. Hover card shows source_file/locator/snippet
-// (webapp-spec S4).
-export function CitationBadge({ citation }: { citation: Citation }) {
+// (webapp-spec S4). Doc citations only — web sources render as a link list
+// in message-list.tsx (webapp-spec S27).
+export function CitationBadge({ citation }: { citation: DocCitation }) {
   return (
     <HoverCardPrimitive.Root openDelay={150}>
       <HoverCardPrimitive.Trigger asChild>

@@ -1,13 +1,19 @@
 "use client";
 
 import ReactMarkdown, { type Components } from "react-markdown";
-import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { Globe, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RagProgress } from "@/components/chat/rag-progress";
 import { RoutePill } from "@/components/chat/route-pill";
 import { CitationBadge } from "@/components/chat/citation-badge";
 import { cn } from "@/lib/utils";
-import { isPersistedMessageId, type ChatMessage, type Citation } from "@/lib/chat-types";
+import {
+  isPersistedMessageId,
+  type ChatMessage,
+  type Citation,
+  type FallbackMode,
+  type WebCitation,
+} from "@/lib/chat-types";
 
 // cite.py already strips out-of-range [n] markers from the answer, so every
 // remaining `[n]` in content maps 1:1 to citations[n-1]. We rewrite them to
@@ -29,7 +35,11 @@ function citationComponents(citations: Citation[]): Components {
     a({ href, children }) {
       const match = href?.match(/^#cite-(\d+)$/);
       const citation = match ? citations[Number(match[1]) - 1] : undefined;
-      if (citation) return <CitationBadge citation={citation} />;
+      // Web citations carry no marker and never pair with an inline [n] —
+      // only doc-shaped items (kind absent = pre-S26 doc row) become badges.
+      // 웹 인용은 marker가 없고 인라인 [n]과 짝지어지지 않는다 — doc 형태
+      // 항목(kind 부재 = S26 이전 doc 행)만 배지가 된다.
+      if (citation && citation.kind !== "web") return <CitationBadge citation={citation} />;
       return (
         <a href={href} target="_blank" rel="noreferrer">
           {children}
@@ -37,6 +47,62 @@ function citationComponents(citations: Citation[]): Components {
       );
     },
   };
+}
+
+// webapp-spec S27: kind:"web" sources render as an external-link list,
+// visually distinct from doc badges (globe icon, soft background). The
+// disclaimer line comes inside the answer body from the backend — nothing
+// duplicated here.
+// webapp-spec S27: kind:"web" 출처는 외부 링크 리스트로, doc 배지와 시각
+// 구분(지구본 아이콘·연한 배경). 디스클레이머 문구는 백엔드가 답변 본문에
+// 넣어 보내므로 여기서 중복 표기하지 않는다.
+function WebSourceList({ citations }: { citations: WebCitation[] }) {
+  return (
+    <ul className="flex flex-col gap-1 rounded-md border border-hairline bg-surface p-2.5">
+      {citations.map((citation) => (
+        <li key={citation.url}>
+          <a
+            href={citation.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-body-sm text-mocha underline-offset-2 hover:underline"
+          >
+            <Globe aria-hidden className="size-3.5 shrink-0" />
+            {citation.title}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// webapp-spec S27: rendered under the offer message from the live stream.
+// One click disables both buttons; `locked` additionally disables them while
+// any other stream is in flight so a stale offer can't start a second
+// concurrent turn.
+// webapp-spec S27: 라이브 스트림의 제안 메시지 아래에 렌더된다. 한 번
+// 클릭하면 두 버튼 모두 비활성. `locked`는 다른 스트림 진행 중에도
+// 비활성화해, 지난 제안이 동시 턴을 하나 더 만들지 못하게 한다.
+function OfferButtons({
+  consumed,
+  locked,
+  onPick,
+}: {
+  consumed: boolean;
+  locked: boolean;
+  onPick: (mode: FallbackMode) => void;
+}) {
+  const disabled = consumed || locked;
+  return (
+    <div className="flex items-center gap-2">
+      <Button type="button" variant="secondary" size="sm" disabled={disabled} onClick={() => onPick("web")}>
+        웹에서 검색
+      </Button>
+      <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => onPick("plain")}>
+        그냥 답변 받기
+      </Button>
+    </div>
+  );
 }
 
 // webapp-spec S14: 👍/👎, same-button re-click clears the vote. Always
@@ -100,11 +166,15 @@ export function MessageList({
   ragLabel,
   onRetry,
   onFeedback,
+  onAcceptOffer,
+  offerLocked = false,
 }: {
   messages: ChatMessage[];
   ragLabel?: string | null;
   onRetry?: (messageId: string) => void;
   onFeedback?: (messageId: string, rating: -1 | 1) => void;
+  onAcceptOffer?: (messageId: string, mode: FallbackMode) => void;
+  offerLocked?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -140,6 +210,10 @@ export function MessageList({
           );
         }
 
+        const webCitations = (message.citations ?? []).filter(
+          (citation): citation is WebCitation => citation.kind === "web",
+        );
+
         return (
           <div key={message.id} className="flex justify-start">
             <div
@@ -153,6 +227,14 @@ export function MessageList({
                   {withCitationLinks(message.content)}
                 </ReactMarkdown>
               </div>
+              {webCitations.length > 0 && <WebSourceList citations={webCitations} />}
+              {onAcceptOffer && message.status === "done" && message.offer === "web_search" && (
+                <OfferButtons
+                  consumed={message.offerConsumed === true}
+                  locked={offerLocked}
+                  onPick={(mode) => onAcceptOffer(message.id, mode)}
+                />
+              )}
               {onFeedback && message.status === "done" && isPersistedMessageId(message.id) && (
                 <FeedbackButtons
                   rating={message.myFeedback}

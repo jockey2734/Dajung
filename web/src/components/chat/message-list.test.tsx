@@ -64,3 +64,98 @@ describe("MessageList feedback buttons (webapp-spec S14)", () => {
     expect(screen.getByRole("button", { name: "싫어요" })).toHaveAttribute("aria-pressed", "false");
   });
 });
+
+describe("MessageList web-fallback offer buttons (webapp-spec S27)", () => {
+  const offerMessage = () =>
+    doneAssistant({
+      content: "문서 검색에 실패했습니다. 웹 검색을 시도해보시겠습니까?",
+      offer: "web_search",
+      retryQuery: "원래 질문",
+    });
+
+  it("renders both offer buttons under a done message with offer web_search", () => {
+    render(<MessageList messages={[offerMessage()]} onAcceptOffer={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "웹에서 검색" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "그냥 답변 받기" })).toBeEnabled();
+  });
+
+  it("hides offer buttons when the message carries no offer", () => {
+    render(<MessageList messages={[doneAssistant()]} onAcceptOffer={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "웹에서 검색" })).not.toBeInTheDocument();
+  });
+
+  it("calls onAcceptOffer with the picked mode", async () => {
+    const user = userEvent.setup();
+    const onAcceptOffer = vi.fn();
+    render(<MessageList messages={[offerMessage()]} onAcceptOffer={onAcceptOffer} />);
+
+    await user.click(screen.getByRole("button", { name: "웹에서 검색" }));
+    expect(onAcceptOffer).toHaveBeenCalledWith("real-id-1", "web");
+
+    await user.click(screen.getByRole("button", { name: "그냥 답변 받기" }));
+    expect(onAcceptOffer).toHaveBeenCalledWith("real-id-1", "plain");
+  });
+
+  it("disables both buttons once the offer is consumed", () => {
+    render(
+      <MessageList messages={[{ ...offerMessage(), offerConsumed: true }]} onAcceptOffer={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: "웹에서 검색" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "그냥 답변 받기" })).toBeDisabled();
+  });
+
+  it("disables both buttons while another stream is in flight (offerLocked)", () => {
+    render(<MessageList messages={[offerMessage()]} onAcceptOffer={vi.fn()} offerLocked />);
+    expect(screen.getByRole("button", { name: "웹에서 검색" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "그냥 답변 받기" })).toBeDisabled();
+  });
+});
+
+describe("MessageList web citations (webapp-spec S27)", () => {
+  it("renders kind:web citations as external links with noopener", () => {
+    render(
+      <MessageList
+        messages={[
+          doneAssistant({
+            content: "(웹 검색 결과 — 동아리 내부 자료 아님)\n웹 답변",
+            citations: [
+              { kind: "web", title: "다도 소개", url: "https://example.com/tea" },
+              { kind: "web", title: "차 역사", url: "https://example.com/history" },
+            ],
+          }),
+        ]}
+      />,
+    );
+    const link = screen.getByRole("link", { name: "다도 소개" });
+    expect(link).toHaveAttribute("href", "https://example.com/tea");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getByRole("link", { name: "차 역사" })).toBeInTheDocument();
+  });
+
+  it("treats citations without kind as doc items (backward compat)", () => {
+    render(
+      <MessageList
+        messages={[
+          doneAssistant({
+            content: "근거 있는 답변 [1]",
+            citations: [
+              {
+                marker: 1,
+                source_file: "운영문서.md",
+                locator: "3장",
+                category: "지식",
+                semester: null,
+                snippet: "발췌",
+              },
+            ],
+          }),
+        ]}
+      />,
+    );
+    // Doc badge renders as an inline [1] button, and no web link list appears.
+    // doc 배지는 인라인 [1] 버튼으로 렌더되고, 웹 링크 리스트는 나오지 않는다.
+    expect(screen.getByRole("button", { name: "[1]" })).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+});

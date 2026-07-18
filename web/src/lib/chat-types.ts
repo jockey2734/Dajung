@@ -1,6 +1,12 @@
-import type { Citation } from "@/lib/sse-parser";
+import type { Citation, DocCitation, WebCitation } from "@/lib/sse-parser";
 
-export type { Citation };
+export type { Citation, DocCitation, WebCitation };
+
+// Explicit-consent fallback modes for the offer buttons (webapp-spec S26/S27).
+// "rag" is the request default, so it never needs sending from here.
+// 제안 버튼의 명시적 동의 폴백 모드 (webapp-spec S26/S27). "rag"는 요청
+// 기본값이라 여기서 보낼 일이 없다.
+export type FallbackMode = "web" | "plain";
 
 export interface ChatMessage {
   id: string;
@@ -26,6 +32,16 @@ export interface ChatMessage {
   // 이 어시스턴트 메시지에 대한 현재 사용자의 👍/👎 (webapp-spec S14). null =
   // 아직 피드백 없음, undefined는 최초 세션 로드/새로고침 전까지만.
   myFeedback?: -1 | 1 | null;
+  // done.offer from the live stream (webapp-spec S27) — set only on the turn
+  // that just streamed, never restored from session metadata (buttons are
+  // live-stream-only; after a reload the user re-asks).
+  // 라이브 스트림의 done.offer (webapp-spec S27) — 방금 스트리밍된 턴에만
+  // 설정되고 세션 metadata에서 복원하지 않는다 (버튼은 라이브 스트림 전용,
+  // 새로고침 후엔 재질문).
+  offer?: string;
+  // True once either offer button was clicked — keeps both disabled.
+  // 제안 버튼 중 하나를 클릭한 뒤 true — 두 버튼 모두 비활성 유지.
+  offerConsumed?: boolean;
 }
 
 // A just-streamed message carries a client-only turn id (see nextTurnId in
