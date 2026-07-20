@@ -101,16 +101,16 @@ sequenceDiagram
     participant W as Next.js BFF
     participant A as FastAPI
     participant G as LangGraph
-    B->>W: POST /api/chat/stream { query, mode?, session_id? }
+    B->>W: POST /api/chat/stream (query, mode?, session_id?)
     W->>A: proxy + auth (JWT re-checked against DB)
     A->>A: daily limit · Qdrant readiness (rag only)
     A->>G: astream(State)
     A-->>B: session (new session only)
-    A-->>B: status ×n (routing → retrieving → generating; rag only)
+    A-->>B: status xN (routing → retrieving → generating — rag only)
     A-->>B: route (rag only)
-    A-->>B: token ×n (PII-masked chunks)
+    A-->>B: token xN (PII-masked chunks)
     A-->>B: citations (kind doc | web, when any)
-    A-->>B: done { remaining, offer? }
+    A-->>B: done (remaining, offer?)
 ```
 
 ### MVP2 — budget agent with HITL · 예산 에이전트 (계획)
