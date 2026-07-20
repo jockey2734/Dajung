@@ -12,6 +12,8 @@
 
 ## Architecture · 아키텍처
 
+### Service topology · 서비스 토폴로지
+
 **EN** — Only Caddy publishes ports; every other service stays on the internal network, and club data never leaves the server (the single external call is the Anthropic API).
 
 **KO** — 포트는 Caddy만 공개한다. 나머지 서비스는 내부 네트워크 전용이며, 동아리 자료는 서버 밖으로 나가지 않는다(유일한 외부 호출은 Anthropic API).
@@ -26,6 +28,8 @@ flowchart LR
     A --> O["Ollama · gemma4:e4b router"]
     A -.->|"generation + web search tool"| X["Anthropic API"]
 ```
+
+### Chat turn — overview · 채팅 턴 개요
 
 **EN** — Each chat turn runs the LangGraph below. Permission filtering cuts restricted chunks before any LLM sees them; when retrieval stays below the confidence threshold after a retry, the turn ends with an explicit web-search offer instead of an ungrounded answer (`web`/`plain` are separate, user-chosen follow-up modes with their own disclaimers).
 
@@ -53,6 +57,80 @@ flowchart TD
     OW --> E
     WG --> E
     PG --> E
+```
+
+### LangGraph — nodes & state channels · 노드·상태 상세
+
+**EN** — The same graph with every node annotated: what it reads from and writes to the shared `State` (a `TypedDict`; keys are set only when present). The router is the only local-LLM call; `clarify` and `offer_web` are deterministic (no LLM at all).
+
+**KO** — 같은 그래프를 노드별로 주석화한 버전: 공유 `State`(`TypedDict`, 키는 있을 때만 설정)에서 무엇을 읽고 무엇을 쓰는지. 라우터만 로컬 LLM 호출이고, `clarify`·`offer_web`은 결정적 노드(LLM 없음)다.
+
+```mermaid
+flowchart TD
+    IN["State in · 입력<br/>query · user · mode<br/>+ history? · user_memory?"] --> M{"mode entry<br/>(no retrieval for web/plain)"}
+    M -->|rag| R["router — gemma4:e4b (local)<br/>reads: query, history(last user q)<br/>writes: route, retries=0,<br/>role_hint? · semester_hint? · topic_hint?"]
+    M -->|web| WG["web_generate — Sonnet + web_search tool<br/>reads: query, history, user_memory<br/>writes: answer(+disclaimer), citations kind:web"]
+    M -->|plain| PG["plain_generate — Sonnet, no tools<br/>reads: query, history, user_memory<br/>writes: answer(+disclaimer), citations=[]"]
+    R -->|knowledge_query| RK["retrieve_knowledge — Qdrant hybrid<br/>reads: query<br/>writes: candidates"]
+    R -->|handover_query| RH["retrieve_handover — Qdrant hybrid<br/>reads: query, user, semester_hint<br/>writes: candidates"]
+    R -->|unclear| CL["clarify — deterministic re-ask<br/>writes: answer(fixed), citations=[]"]
+    RK --> PF["permission — restricted cut, owner bypass<br/>reads: candidates, user<br/>writes: candidates(filtered)"]
+    RH --> PF
+    PF --> RR["rerank — bge-reranker-v2-m3 (CPU)<br/>reads: candidates, retries, route<br/>writes: reranked, route_after, retries"]
+    RR -.->|"top < threshold ∧ retries left"| RK
+    RR -.->|"top < threshold ∧ retries left"| RH
+    RR -->|"top ≥ threshold"| G["generate — Haiku/Sonnet by complexity<br/>generate_handover — Sonnet + role_hint<br/>reads: query, reranked, history, user_memory<br/>writes: answer, model_used"]
+    RR -->|"exhausted ∧ top < threshold"| OW["offer_web — deterministic consent prompt<br/>writes: answer(fixed), offer=web_search"]
+    G --> CT["cite — marker mapping<br/>reads: answer, reranked<br/>writes: citations kind:doc"]
+    CT --> E((END))
+    CL --> E
+    OW --> E
+    WG --> E
+    PG --> E
+```
+
+### Chat turn — SSE event sequence · SSE 이벤트 순서
+
+**EN** — What the browser actually receives per turn. `route` and per-stage `status` events exist only on `rag` turns; `offer` appears on `done` only when the turn ended with the web-search consent prompt.
+
+**KO** — 턴마다 브라우저가 실제로 받는 이벤트. `route`·단계별 `status`는 `rag` 턴에만 있고, `offer`는 웹 검색 동의 제안으로 끝난 턴의 `done`에만 붙는다.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser / PWA
+    participant W as Next.js BFF
+    participant A as FastAPI
+    participant G as LangGraph
+    B->>W: POST /api/chat/stream { query, mode?, session_id? }
+    W->>A: proxy + auth (JWT re-checked against DB)
+    A->>A: daily limit · Qdrant readiness (rag only)
+    A->>G: astream(State)
+    A-->>B: session (new session only)
+    A-->>B: status ×n (routing → retrieving → generating; rag only)
+    A-->>B: route (rag only)
+    A-->>B: token ×n (PII-masked chunks)
+    A-->>B: citations (kind doc | web, when any)
+    A-->>B: done { remaining, offer? }
+```
+
+### MVP2 — budget agent with HITL · 예산 에이전트 (계획)
+
+**EN** — *Planned, not yet implemented.* MVP2 adds a `budget_query` route and a budget subgraph that drafts semester budgets from past ledgers. The draft **always pauses on a LangGraph `interrupt`** for a human approve/edit/reject loop — budget output is never fully automated, and this is the only place interrupts are used (chat fallback stays two-turn by design).
+
+**KO** — *계획 단계 — 미구현.* MVP2는 `budget_query` 라우트와 예산 서브그래프를 추가한다. 과거 장부 기반으로 학기 예산안을 작성하되, 초안은 **반드시 LangGraph `interrupt`로 멈춰** 운영진 승인/수정/반려 루프를 거친다 — 예산 산출은 완전 자동화하지 않으며, interrupt는 이곳에서만 쓴다(채팅 폴백은 설계상 2턴 유지).
+
+```mermaid
+flowchart TD
+    R["router (MVP2: +budget_query)"] -->|budget_query| BX["extract — parse ledgers/receipts<br/>지출·정산 기록 추출"]
+    BX --> BC["categorize — spend categories<br/>지출 분류"]
+    BC --> BA["analyze — per-semester patterns<br/>학기별 패턴 분석"]
+    BA --> BD["draft — Opus 4.8 budget proposal<br/>예산안 초안 생성"]
+    BD --> HI{{"interrupt · HITL<br/>운영진 검토"}}
+    HI -->|"approve · 승인"| BF["finalize — versioned budget doc<br/>확정본 기록"]
+    HI -->|"edit · 수정 지시"| BD
+    HI -->|"reject · 반려"| BE["end without draft<br/>초안 폐기"]
+    BF --> E2((END))
+    BE --> E2
 ```
 
 ## Stack · 스택
