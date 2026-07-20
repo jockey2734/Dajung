@@ -6,9 +6,54 @@
 
 ## Status · 현재 상태
 
-**EN** — MVP1 (CLI) in development: ingest → hybrid search (BGE-M3 dense+sparse, RRF) → rerank → cited answers in the terminal. Web serving (FastAPI + Next.js) comes after the CLI is validated.
+**EN** — MVP1 web serving complete: SSE chat with cited RAG answers, session history context, a consent-gated web-search fallback, a three-tier admin surface (accounts, president transfer, invitations, semester rosters, document management), and PWA packaging. Next: MVP2 budget-drafting agent with human-in-the-loop approval.
 
-**KO** — MVP1 (CLI) 개발 중: 인덱싱 → 하이브리드 검색(BGE-M3 dense+sparse, RRF) → 리랭크 → 터미널 인용 답변. 웹 서빙(FastAPI + Next.js)은 CLI 검증 후.
+**KO** — MVP1 웹 서빙 완료: 인용 포함 RAG 답변의 SSE 채팅, 세션 히스토리 맥락, 사용자 동의 기반 웹 검색 폴백, 3계층 관리자 기능(계정·회장 이양·통과번호·학기 명단·문서 관리), PWA 패키징. 다음: 운영진 승인 루프(HITL)를 갖춘 MVP2 예산안 에이전트.
+
+## Architecture · 아키텍처
+
+**EN** — Only Caddy publishes ports; every other service stays on the internal network, and club data never leaves the server (the single external call is the Anthropic API).
+
+**KO** — 포트는 Caddy만 공개한다. 나머지 서비스는 내부 네트워크 전용이며, 동아리 자료는 서버 밖으로 나가지 않는다(유일한 외부 호출은 Anthropic API).
+
+```mermaid
+flowchart LR
+    U["Browser / PWA"] -->|"HTTPS 443"| C[Caddy]
+    C --> W["Next.js web (BFF)"]
+    W --> A["FastAPI api"]
+    A --> P[(PostgreSQL)]
+    A --> Q[(Qdrant)]
+    A --> O["Ollama · gemma4:e4b router"]
+    A -.->|"generation + web search tool"| X["Anthropic API"]
+```
+
+**EN** — Each chat turn runs the LangGraph below. Permission filtering cuts restricted chunks before any LLM sees them; when retrieval stays below the confidence threshold after a retry, the turn ends with an explicit web-search offer instead of an ungrounded answer (`web`/`plain` are separate, user-chosen follow-up modes with their own disclaimers).
+
+**KO** — 채팅 턴마다 아래 LangGraph가 실행된다. 권한 필터가 restricted 청크를 LLM에 닿기 전에 잘라내며, 재시도 후에도 신뢰도 임계값에 못 미치면 근거 없는 답변 대신 명시적 웹 검색 제안으로 턴을 마친다(`web`/`plain`은 사용자가 직접 선택하는 별도 후속 모드로, 각자 고정 디스클레이머를 단다).
+
+```mermaid
+flowchart TD
+    IN["query + mode"] --> M{mode}
+    M -->|"rag (default)"| R["router · local gemma4:e4b"]
+    M -->|web| WG["web_generate · Anthropic web search"]
+    M -->|plain| PG["plain_generate · no evidence"]
+    R -->|knowledge_query| RK[retrieve_knowledge]
+    R -->|handover_query| RH[retrieve_handover]
+    R -->|unclear| CL[clarify]
+    RK --> PF["permission · cut restricted"]
+    RH --> PF
+    PF --> RR[rerank]
+    RR -.->|"low score · 1 retry"| RK
+    RR -.->|"low score · 1 retry"| RH
+    RR -->|"score ok"| G["generate / generate_handover"]
+    RR -->|"retries exhausted + low"| OW["offer_web · consent prompt"]
+    G --> CT["cite · citation markers"]
+    CT --> E((END))
+    CL --> E
+    OW --> E
+    WG --> E
+    PG --> E
+```
 
 ## Stack · 스택
 
