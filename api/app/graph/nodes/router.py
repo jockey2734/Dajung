@@ -13,6 +13,7 @@ import re
 import time
 from typing import Any
 
+from api.app.core.clock import now_kst, semester_label
 from api.app.core.config import settings
 from api.app.core.logging import get_logger
 from api.app.graph.history import latest_user_question
@@ -43,6 +44,9 @@ JSON 형식으로 응답:
 - handover_query: 직책 인수인계 — "물려받았는데", "신임 회장/총무가 할 일",
   "학기 초에 뭐부터" 류의 다문서 종합 질문
 - unclear: 위 둘 다 확신 없음 → 시스템이 되묻는다
+
+현재: {today} (학기 {semester})
+"이번 학기"는 {semester}, "지난 학기"는 그 직전 학기로 해석해 semester_hint에 넣으세요.
 
 {previous_question_line}질문: {query}
 """
@@ -96,6 +100,9 @@ async def router_node(state: State) -> dict[str, Any]:
     backend = "local"
 
     try:
+        current = now_kst()
+        today = f"{current.year}년 {current.month}월 {current.day}일"
+        semester = semester_label(current)
         previous_question = latest_user_question(state.get("history", []))
         previous_question_line = (
             f"직전 질문: {previous_question}\n" if previous_question is not None else ""
@@ -108,7 +115,10 @@ async def router_node(state: State) -> dict[str, Any]:
                         {
                             "role": "user",
                             "content": ROUTER_PROMPT.format(
-                                query=query, previous_question_line=previous_question_line
+                                query=query,
+                                previous_question_line=previous_question_line,
+                                today=today,
+                                semester=semester,
                             ),
                         }
                     ],

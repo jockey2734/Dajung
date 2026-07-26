@@ -8,16 +8,14 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.app.core.account_term import ACCOUNT_TERM_MONTHS, add_months, to_utc
+from api.app.core.clock import KST, current_semester
 from api.app.db.models import StaffSemester, User
-
-KST = ZoneInfo("Asia/Seoul")
 
 
 class RosterNotFoundError(Exception):
@@ -69,19 +67,6 @@ def semester_key(value: str) -> tuple[int, int]:
     """
     year, term = value.split("-", maxsplit=1)
     return int(year), int(term)
-
-
-def current_semester(now: datetime) -> tuple[int, int]:
-    """Return the academic semester containing the KST timestamp.
-
-    KST 시각이 속한 학기를 반환한다.
-    """
-    local = to_utc(now).astimezone(KST)
-    if local.month < 3:
-        return local.year - 1, 2
-    if local.month < 9:
-        return local.year, 1
-    return local.year, 2
 
 
 def semester_expiry(value: str) -> datetime:

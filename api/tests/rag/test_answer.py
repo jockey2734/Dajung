@@ -47,6 +47,7 @@ def _reranked() -> list[dict[str, Any]]:
                 "locator": f"p.{i}",
                 "category": "인수인계",
                 "semester": "2025-1",
+                "last_modified": "2026-07-20",
             },
             "rerank_score": 0.9 - i * 0.1,
         }
@@ -57,6 +58,17 @@ def _reranked() -> list[dict[str, Any]]:
 def test_build_context_numbering() -> None:
     ctx = build_context(_reranked())
     assert "[1] [문서: f0.md]" in ctx and "[3] [문서: f2.md]" in ctx
+    assert "(학기: 2025-1, 수정: 2026-07-20)" in ctx
+
+
+def test_build_context_uses_unknown_for_missing_freshness() -> None:
+    item = _reranked()[0]
+    item["payload"].pop("semester")
+    item["payload"].pop("last_modified")
+
+    ctx = build_context([item])
+
+    assert "(학기: 미상, 수정: 미상)" in ctx
 
 
 def test_citations_order_and_bounds() -> None:

@@ -5,8 +5,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 
+from api.app.core.clock import KST
 from api.app.graph.nodes import router as router_mod
 from api.app.graph.state import Route, State
 
@@ -94,6 +97,31 @@ async def test_router_prompt_includes_only_latest_user_question(
     assert "직전 질문: 가장 최근 질문" in captured["prompt"]
     assert "오래된 질문" not in captured["prompt"]
     assert "직전 답변" not in captured["prompt"]
+
+
+async def test_router_prompt_includes_calculated_date_and_semester(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    async def fake_chat(*args: object, **kwargs: object) -> str:
+        messages = kwargs["messages"]
+        assert isinstance(messages, list)
+        captured["prompt"] = messages[0]["content"]
+        return '{"route": "knowledge_query", "semester_hint": "2026-1"}'
+
+    monkeypatch.setattr(router_mod._client, "chat", fake_chat)
+    monkeypatch.setattr(
+        router_mod,
+        "now_kst",
+        lambda: datetime(2026, 7, 26, 9, 30, tzinfo=KST),
+    )
+
+    await router_mod.router_node(_state("이번 학기 총무 업무"))
+
+    assert "현재: 2026년 7월 26일 (학기 2026-1)" in captured["prompt"]
+    assert '"이번 학기"는 2026-1' in captured["prompt"]
+    assert '"지난 학기"는 그 직전 학기' in captured["prompt"]
 
 
 def test_parse_router_json_pure() -> None:
