@@ -124,7 +124,7 @@ flowchart TD
     R["router (MVP2: +budget_query)"] -->|budget_query| BX["extract — parse ledgers/receipts<br/>지출·정산 기록 추출"]
     BX --> BC["categorize — spend categories<br/>지출 분류"]
     BC --> BA["analyze — per-semester patterns<br/>학기별 패턴 분석"]
-    BA --> BD["draft — Opus 4.8 budget proposal<br/>예산안 초안 생성"]
+    BA --> BD["draft — Opus 5 budget proposal<br/>예산안 초안 생성"]
     BD --> HI{{"interrupt · HITL<br/>운영진 검토"}}
     HI -->|"approve · 승인"| BF["finalize — versioned budget doc<br/>확정본 기록"]
     HI -->|"edit · 수정 지시"| BD

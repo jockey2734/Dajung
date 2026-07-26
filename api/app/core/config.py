@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     model_sonnet: str = "claude-sonnet-5"
     # Used from MVP2 (budget HITL) onward.
     # MVP2(예산 HITL)부터 사용한다.
-    model_opus: str = "claude-opus-4-8"
+    model_opus: str = "claude-opus-5"
     max_tokens_generate: int = 2048
     max_tokens_header: int = 200
 
