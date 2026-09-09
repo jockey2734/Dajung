@@ -52,10 +52,15 @@ def pick_model(route: str, question: str, n_hits: int) -> str:
 
 
 def build_context(reranked: list[dict[str, Any]]) -> str:
-    parts = [
-        f"[{i + 1}] {c['payload']['context_header']}\n{c['payload']['text']}"
-        for i, c in enumerate(reranked)
-    ]
+    parts = []
+    for index, candidate in enumerate(reranked, start=1):
+        payload = candidate["payload"]
+        semester = payload.get("semester") or "미상"
+        last_modified = payload.get("last_modified") or "미상"
+        parts.append(
+            f"[{index}] {payload['context_header']}  "
+            f"(학기: {semester}, 수정: {last_modified})\n{payload['text']}"
+        )
     return "\n\n".join(parts)
 
 

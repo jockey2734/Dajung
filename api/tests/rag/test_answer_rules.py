@@ -20,6 +20,7 @@ def test_rules_forbid_unsourced_claims() -> None:
 
 def test_rules_require_markers() -> None:
     assert "[번호]" in ANSWER_RULES
+    assert "서로 다른 학기의 자료가 충돌하면 최신 학기" in ANSWER_RULES
 
 
 def test_incident_policy_present() -> None:

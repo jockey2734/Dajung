@@ -8,7 +8,12 @@ import pytest
 
 from api.app.graph.nodes import generate as generate_mod
 from api.app.graph.nodes import generate_handover as handover_mod
-from api.app.llm.anthropic_client import ATTACHMENT_RULE
+from api.app.llm import anthropic_client as anthropic_mod
+from api.app.llm.anthropic_client import (
+    ATTACHMENT_RULE,
+    answer_system_blocks,
+    fallback_system_blocks,
+)
 
 
 def _reranked() -> list[dict[str, Any]]:
@@ -117,3 +122,31 @@ def test_generate_node_omits_history_block_when_empty(monkeypatch: pytest.Monkey
     generate_mod.generate_node({"query": "새 질문", "reranked": _reranked()})
 
     assert "<이전 대화>" not in captured["user_text"]
+
+
+def test_date_block_is_last_uncached_and_preserves_cache_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixed_context = "오늘: 2026년 7월 26일 (일) · 현재 학기: 2026-1 · 여름방학"
+    monkeypatch.setattr(anthropic_mod, "date_context", lambda: fixed_context)
+
+    block_sets = [
+        answer_system_blocks(),
+        answer_system_blocks("- 총무 업무"),
+        fallback_system_blocks("web", "- 총무 업무"),
+        fallback_system_blocks("plain", "- 총무 업무"),
+    ]
+    for blocks in block_sets:
+        assert blocks[-1]["text"].startswith(f"## 현재 시각\n{fixed_context}\n")
+        assert "cache_control" not in blocks[-1]
+        assert sum("cache_control" in block for block in blocks) <= 4
+        memory_indexes = [
+            index
+            for index, block in enumerate(blocks)
+            if block["text"].startswith("## 사용자 컨텍스트")
+        ]
+        if memory_indexes:
+            assert memory_indexes == [len(blocks) - 2]
+        assert "상대 표현" in blocks[-1]["text"]
+        assert "자료의 학기와 현재 학기가 다르면" in blocks[-1]["text"]
+        assert "미래 일정은 단정하지 않고" in blocks[-1]["text"]
