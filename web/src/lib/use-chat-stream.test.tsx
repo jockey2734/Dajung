@@ -141,6 +141,64 @@ describe("useChatStream", () => {
     expect(result.current.messages[0].myFeedback).toBe(1);
   });
 
+  // webapp-spec S29: loaded rows carry the DB created_at; a live turn is
+  // stamped with the client clock until the post-done refresh replaces it.
+  // webapp-spec S29: 로드된 행은 DB created_at을 가지고, 라이브 턴은 done 후
+  // 새로고침이 교체하기 전까지 클라이언트 시각이 찍힌다.
+  it("maps created_at onto createdAt for loaded rows and stamps live turns with the client clock", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ sessions: [] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "s1",
+          title: "t",
+          messages: [
+            {
+              id: "m1",
+              role: "user",
+              content: "질문",
+              metadata: {},
+              created_at: "2026-01-01T00:00:00Z",
+              my_feedback: null,
+            },
+          ],
+        }),
+      })
+      // Non-SSE failure keeps the live turn's client-side rows in place.
+      // SSE가 아닌 실패는 라이브 턴의 클라이언트 행을 그대로 남긴다.
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { message: "실패" } }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+    const { result } = renderHook(() => useChatStream());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/sessions"));
+
+    await act(async () => {
+      await result.current.selectSession("s1");
+    });
+    expect(result.current.messages[0].createdAt).toBe("2026-01-01T00:00:00Z");
+
+    const before = Date.now();
+    await act(async () => {
+      result.current.sendMessage("새 질문");
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(3));
+
+    const [, liveUser, liveAssistant] = result.current.messages;
+    expect(liveUser.createdAt).toBeDefined();
+    expect(liveAssistant.createdAt).toBe(liveUser.createdAt);
+    const stamped = new Date(liveUser.createdAt as string).getTime();
+    expect(stamped).toBeGreaterThanOrEqual(before);
+    expect(stamped).toBeLessThanOrEqual(Date.now());
+  });
+
   it("setFeedback: click sends PUT, re-click sends DELETE, other button replaces via PUT", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

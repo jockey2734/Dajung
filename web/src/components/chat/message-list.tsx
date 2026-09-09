@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RagProgress } from "@/components/chat/rag-progress";
 import { RoutePill } from "@/components/chat/route-pill";
 import { CitationBadge } from "@/components/chat/citation-badge";
+import { formatRelativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
 import {
   isPersistedMessageId,
@@ -148,6 +149,23 @@ function FeedbackButtons({
   );
 }
 
+// webapp-spec S29: relative time under the user bubble / in the assistant
+// footer row. Rows mapped before S29 have no createdAt → render nothing.
+// `text-muted-foreground`, not `text-muted` — `--color-muted` is the cream
+// surface tone (#FBF4E0), unreadable as text on canvas.
+// webapp-spec S29: user 말풍선 아래 / assistant 푸터 줄에 상대시각. S29 이전에
+// 매핑된 행은 createdAt이 없어 아무것도 렌더하지 않는다. `text-muted`가 아닌
+// `text-muted-foreground` — `--color-muted`는 크림 표면색(#FBF4E0)이라 canvas
+// 위 글자로는 읽히지 않는다.
+function MessageTime({ createdAt }: { createdAt?: string }) {
+  if (!createdAt) return null;
+  return (
+    <time dateTime={createdAt} className="text-caption text-muted-foreground">
+      {formatRelativeTime(createdAt)}
+    </time>
+  );
+}
+
 function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-semantic-error bg-semantic-error-soft p-4 text-body-sm text-semantic-error">
@@ -181,10 +199,11 @@ export function MessageList({
       {messages.map((message) => {
         if (message.role === "user") {
           return (
-            <div key={message.id} className="flex justify-end">
+            <div key={message.id} className="flex flex-col items-end gap-1">
               <div className="max-w-[75%] rounded-lg bg-primary-soft px-4 py-2.5 text-body text-ink">
                 {message.content}
               </div>
+              <MessageTime createdAt={message.createdAt} />
             </div>
           );
         }
@@ -213,6 +232,7 @@ export function MessageList({
         const webCitations = (message.citations ?? []).filter(
           (citation): citation is WebCitation => citation.kind === "web",
         );
+        const showFeedback = Boolean(onFeedback) && message.status === "done" && isPersistedMessageId(message.id);
 
         return (
           <div key={message.id} className="flex justify-start">
@@ -235,11 +255,16 @@ export function MessageList({
                   onPick={(mode) => onAcceptOffer(message.id, mode)}
                 />
               )}
-              {onFeedback && message.status === "done" && isPersistedMessageId(message.id) && (
-                <FeedbackButtons
-                  rating={message.myFeedback}
-                  onPick={(rating) => onFeedback(message.id, rating)}
-                />
+              {(showFeedback || message.createdAt) && (
+                <div className="flex items-center gap-2">
+                  {showFeedback && onFeedback && (
+                    <FeedbackButtons
+                      rating={message.myFeedback}
+                      onPick={(rating) => onFeedback(message.id, rating)}
+                    />
+                  )}
+                  <MessageTime createdAt={message.createdAt} />
+                </div>
               )}
             </div>
           </div>

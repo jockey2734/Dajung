@@ -52,6 +52,7 @@ function mapSessionMessages(messages: SessionDetailApiResponse["messages"]): Cha
     route: m.metadata.route,
     citations: m.metadata.citations,
     myFeedback: m.my_feedback,
+    createdAt: m.created_at,
   }));
 }
 
@@ -187,11 +188,23 @@ export function useChatStream() {
       const turnId = nextTurnId();
       const userMessageId = `${turnId}-user`;
       const assistantMessageId = `${turnId}-assistant`;
+      // Client clock stands in until the post-`done` refresh brings the DB
+      // created_at (webapp-spec S29).
+      // `done` 후 새로고침이 DB created_at을 가져올 때까지 클라이언트 시각으로
+      // 대신한다 (webapp-spec S29).
+      const createdAt = new Date().toISOString();
 
       setMessages((prev) => [
         ...prev,
-        { id: userMessageId, role: "user", content: text, status: "done" },
-        { id: assistantMessageId, role: "assistant", content: "", status: "streaming", retryQuery: text },
+        { id: userMessageId, role: "user", content: text, status: "done", createdAt },
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+          status: "streaming",
+          retryQuery: text,
+          createdAt,
+        },
       ]);
       setRagLabel(mode ? MODE_LABELS[mode] : "질문을 분류하고 있어요");
       setIsStreaming(true);

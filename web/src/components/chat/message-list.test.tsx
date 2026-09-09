@@ -159,3 +159,42 @@ describe("MessageList web citations (webapp-spec S27)", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });
+
+describe("MessageList message time (webapp-spec S29)", () => {
+  it("renders createdAt as relative time inside <time dateTime> for user and assistant messages", () => {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { container } = render(
+      <MessageList
+        messages={[
+          { id: "u1", role: "user", content: "질문", status: "done", createdAt: fiveMinutesAgo },
+          doneAssistant({ createdAt: fiveMinutesAgo }),
+        ]}
+        onFeedback={vi.fn()}
+      />,
+    );
+    const times = container.querySelectorAll("time");
+    expect(times).toHaveLength(2);
+    for (const time of Array.from(times)) {
+      expect(time).toHaveAttribute("dateTime", fiveMinutesAgo);
+      expect(time).toHaveTextContent("5분 전");
+    }
+    // Assistant time shares the footer row with the feedback buttons.
+    // assistant 시각은 피드백 버튼과 같은 푸터 줄에 있다.
+    expect(screen.getByRole("button", { name: "좋아요" }).parentElement?.parentElement).toContainElement(
+      times[1],
+    );
+  });
+
+  it("renders no time when createdAt is absent (rows mapped before S29)", () => {
+    const { container } = render(
+      <MessageList
+        messages={[{ id: "u1", role: "user", content: "질문", status: "done" }, doneAssistant()]}
+        onFeedback={vi.fn()}
+      />,
+    );
+    expect(container.querySelector("time")).toBeNull();
+    // Feedback buttons still render on their own in the footer row.
+    // 피드백 버튼은 푸터 줄에 단독으로 여전히 렌더된다.
+    expect(screen.getByRole("button", { name: "좋아요" })).toBeInTheDocument();
+  });
+});
