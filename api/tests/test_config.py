@@ -14,7 +14,7 @@ def test_defaults_match_spec() -> None:
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.model_haiku == "claude-haiku-4-5"
     assert s.model_sonnet == "claude-sonnet-5"
-    assert s.model_opus == "claude-opus-4-8"
+    assert s.model_opus == "claude-opus-5"
     assert s.router_model == "gemma4:e4b"
     assert s.rerank_threshold == 0.5
     assert s.retrieve_limit == 20
