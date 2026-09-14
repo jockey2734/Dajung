@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -150,3 +151,92 @@ def test_date_block_is_last_uncached_and_preserves_cache_limit(
         assert "상대 표현" in blocks[-1]["text"]
         assert "자료의 학기와 현재 학기가 다르면" in blocks[-1]["text"]
         assert "미래 일정은 단정하지 않고" in blocks[-1]["text"]
+
+
+# webapp-spec S30-5: the FX block sits between the question and the 자료 material,
+# carries no [n] marker, and rule 7 tells the model it is not a citation source.
+# webapp-spec S30-5: 환율 블록은 질문과 자료 사이에 놓이고, [n] 마커가 없으며,
+# 규칙 7이 모델에게 인용 출처가 아님을 알린다.
+FX_BLOCK = "## 환율 (한국수출입은행 매매기준율, 2026-07-24 고시 기준)\n- 1 CNY = 191.24원"
+RULE_7 = (
+    "7. 환율 블록은 시스템이 제공한 참고 정보이며 인용 출처가 아니다. [번호] 마커를 붙이지 않는다."
+)
+
+
+def test_generate_node_places_fx_block_before_material_without_marker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_complete(
+        model: str,
+        system_blocks: list[dict[str, Any]],
+        user_text: str,
+        max_tokens: int,
+    ) -> str:
+        captured["texts"] = [block["text"] for block in system_blocks]
+        captured["user_text"] = user_text
+        return "답변 [1]"
+
+    monkeypatch.setattr(generate_mod, "complete", fake_complete)
+    generate_mod.generate_node(
+        {"query": "대홍포 얼마야", "reranked": _reranked(), "fx_block": FX_BLOCK}
+    )
+
+    text = captured["user_text"]
+    assert text.index("질문: 대홍포 얼마야") < text.index(FX_BLOCK) < text.index("자료:\n[1] ")
+    assert re.search(r"\[\d+\][^\n]*## 환율", text) is None
+    assert any(RULE_7 in block_text for block_text in captured["texts"])
+
+
+def test_generate_handover_places_fx_block_before_material(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_complete(
+        model: str,
+        system_blocks: list[dict[str, Any]],
+        user_text: str,
+        max_tokens: int,
+    ) -> str:
+        captured["texts"] = [block["text"] for block in system_blocks]
+        captured["user_text"] = user_text
+        return "인수인계 답변 [1]"
+
+    monkeypatch.setattr(handover_mod, "complete", fake_complete)
+    handover_mod.generate_handover(
+        {
+            "query": "타오바오 공구 인수인계",
+            "reranked": _reranked(),
+            "role_hint": "총무",
+            "fx_block": FX_BLOCK,
+        }
+    )
+
+    text = captured["user_text"]
+    question_at = text.index("질문: 타오바오 공구 인수인계")
+    assert question_at < text.index(FX_BLOCK) < text.index("자료:\n[1] ")
+    assert re.search(r"\[\d+\][^\n]*## 환율", text) is None
+    assert any(RULE_7 in block_text for block_text in captured["texts"])
+
+
+def test_generate_nodes_omit_fx_block_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, str] = {}
+
+    def fake_complete(
+        model: str,
+        system_blocks: list[dict[str, Any]],
+        user_text: str,
+        max_tokens: int,
+    ) -> str:
+        captured["user_text"] = user_text
+        return "답변 [1]"
+
+    monkeypatch.setattr(generate_mod, "complete", fake_complete)
+    generate_mod.generate_node({"query": "새 질문", "reranked": _reranked()})
+    assert "## 환율" not in captured["user_text"]
+
+    monkeypatch.setattr(handover_mod, "complete", fake_complete)
+    handover_mod.generate_handover({"query": "인수인계 질문", "reranked": _reranked()})
+    assert "## 환율" not in captured["user_text"]

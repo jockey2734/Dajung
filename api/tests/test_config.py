@@ -25,6 +25,11 @@ def test_defaults_match_spec() -> None:
     assert s.history_message_max_chars == 500
     assert s.history_total_max_chars == 4000
     assert s.web_search_max_uses == 3
+    assert s.fx_timeout_s == 5.0
+    assert s.fx_cache_ttl_s == 3600
+    assert s.fx_lookback_days == 7
+    assert s.fx_de_minimis_usd == 150
+    assert s.fx_de_minimis_usd_us == 200
 
 
 def test_env_prefix_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -41,3 +46,4 @@ def test_secrets_default_empty() -> None:
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.anthropic_api_key == ""
     assert s.qdrant_api_key == ""
+    assert s.koreaexim_api_key == ""
