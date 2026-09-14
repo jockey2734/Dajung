@@ -14,6 +14,7 @@ from langgraph.graph import END, StateGraph
 
 from api.app.graph.nodes.cite import cite_node
 from api.app.graph.nodes.clarify import clarify_node
+from api.app.graph.nodes.fx_context import fx_context_node
 from api.app.graph.nodes.generate import generate_node
 from api.app.graph.nodes.generate_handover import generate_handover
 from api.app.graph.nodes.offer_web import offer_web_node
@@ -57,6 +58,7 @@ def build_graph() -> Any:
     graph.add_node("offer_web", offer_web_node)
     graph.add_node("web_generate", web_generate_node)
     graph.add_node("plain_generate", plain_generate_node)
+    graph.add_node("fx_context", fx_context_node)
 
     graph.set_conditional_entry_point(
         route_graph_entry,
@@ -80,15 +82,27 @@ def build_graph() -> Any:
     graph.add_edge("retrieve_handover", "permission")
     graph.add_edge("permission", "rerank")
 
+    # Generate paths pass through fx_context first; retry and offer_web do not
+    # (no material means no use for a rate). route_after is rerank's own decision.
+    # 생성 경로는 fx_context를 먼저 거치고, 재시도·offer_web은 거치지 않는다
+    # (자료가 없으면 환율도 쓸모없다). route_after는 rerank가 내린 결정 그대로다.
     graph.add_conditional_edges(
         "rerank",
         route_after_rerank,
         {
-            "generate": "generate",
-            "generate_handover": "generate_handover",
+            "generate": "fx_context",
+            "generate_handover": "fx_context",
             "retrieve_knowledge": "retrieve_knowledge",
             "retrieve_handover": "retrieve_handover",
             "offer_web": "offer_web",
+        },
+    )
+    graph.add_conditional_edges(
+        "fx_context",
+        lambda s: s["route_after"],
+        {
+            "generate": "generate",
+            "generate_handover": "generate_handover",
         },
     )
 

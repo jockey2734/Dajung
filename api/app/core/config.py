@@ -82,6 +82,22 @@ class Settings(BaseSettings):
     # Anthropic server-side web search cost/latency bound (webapp-spec S26).
     # Anthropic 서버측 웹 검색 비용·지연 상한 (webapp-spec S26).
     web_search_max_uses: int = 3
+    # Conditional exchange-rate lookup via 한국수출입은행 오픈API (ADR-028, webapp-spec S30).
+    # 한국수출입은행 오픈API 조건부 환율 조회 (ADR-028, webapp-spec S30).
+    # Key comes from .env only: DAJUNG_KOREAEXIM_API_KEY. Empty = lookup reports no_key.
+    # 키는 .env로만 주입: DAJUNG_KOREAEXIM_API_KEY. 비어 있으면 조회가 no_key를 보고한다.
+    koreaexim_api_key: str = ""
+    fx_timeout_s: float = 5.0
+    # Quotes post once per business day; 1 h TTL keeps well under the 1,000/day key cap.
+    # 고시는 영업일 1회라 1시간 TTL이면 키당 일 1,000회 한도에 한참 못 미친다.
+    fx_cache_ttl_s: int = 3600
+    # Walk back this many calendar days for the latest posted quote (weekends/holidays).
+    # 최신 고시를 찾아 이만큼의 달력일을 역행한다 (주말·공휴일).
+    fx_lookback_days: int = 7
+    # Personal-use customs de minimis in USD: all origins vs US-origin (운하 확정 2026-07-26).
+    # 개인 자가사용 면세 한도(USD): 일반 vs 미국발 (운하 확정 2026-07-26).
+    fx_de_minimis_usd: int = 150
+    fx_de_minimis_usd_us: int = 200
     # Weekly user-memory batch input/output bounds (webapp-spec S6).
     # 주간 사용자 메모리 배치 입력/출력 한계 (webapp-spec S6).
     memory_input_chars: int = 30000

@@ -40,3 +40,6 @@ class State(TypedDict, total=False):
     model_used: str
     citations: list[dict[str, Any]]
     offer: Literal["web_search"]
+    # Finished exchange-rate prompt block from fx_context (webapp-spec S30) — never raw numbers.
+    # fx_context가 완성한 환율 프롬프트 블록 (webapp-spec S30) — 숫자를 따로 담지 않는다.
+    fx_block: str | None
