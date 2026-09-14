@@ -42,12 +42,12 @@ export interface ChatMessage {
   // True once either offer button was clicked — keeps both disabled.
   // 제안 버튼 중 하나를 클릭한 뒤 true — 두 버튼 모두 비활성 유지.
   offerConsumed?: boolean;
-  // ISO 8601 — `MessageOut.created_at` for loaded rows, client clock for a
-  // just-streamed turn (webapp-spec S29). Absent on rows mapped before S29
-  // shipped, in which case no time is rendered.
-  // ISO 8601 — 로드된 행은 `MessageOut.created_at`, 방금 스트리밍된 턴은
-  // 클라이언트 시각 (webapp-spec S29). S29 이전에 매핑된 행에는 없으며 그땐
-  // 시각을 렌더하지 않는다.
+  // Millisecond-precision ISO 8601 — `MessageOut.created_at` re-serialized for
+  // loaded rows, client clock for a just-streamed turn (webapp-spec S29).
+  // Undefined only when the server value failed to parse; nothing renders then.
+  // 밀리초 정밀도 ISO 8601 — 로드된 행은 `MessageOut.created_at` 재직렬화, 방금
+  // 스트리밍된 턴은 클라이언트 시각 (webapp-spec S29). 서버 값 해석 실패 시에만
+  // undefined이며 그땐 아무것도 렌더하지 않는다.
   createdAt?: string;
 }
 

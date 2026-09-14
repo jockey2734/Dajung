@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MessageList } from "./message-list";
@@ -161,8 +161,19 @@ describe("MessageList web citations (webapp-spec S27)", () => {
 });
 
 describe("MessageList message time (webapp-spec S29)", () => {
+  // Pin the clock so "5분 전" never depends on the real wall clock (PR #55 review d).
+  // "5분 전"이 실제 벽시계에 기대지 않도록 시계를 고정한다 (PR #55 리뷰 d).
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-14T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders createdAt as relative time inside <time dateTime> for user and assistant messages", () => {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const fiveMinutesAgo = "2026-09-14T11:55:00.000Z";
     const { container } = render(
       <MessageList
         messages={[
@@ -185,7 +196,35 @@ describe("MessageList message time (webapp-spec S29)", () => {
     );
   });
 
-  it("renders no time when createdAt is absent (rows mapped before S29)", () => {
+  it("keeps the assistant footer (time included) until the turn is done", () => {
+    const createdAt = "2026-09-14T11:59:30.000Z";
+    const { container } = render(
+      <MessageList
+        messages={[
+          { id: "u1", role: "user", content: "질문", status: "done", createdAt },
+          doneAssistant({ status: "streaming", content: "부분 답변", createdAt }),
+        ]}
+        onFeedback={vi.fn()}
+      />,
+    );
+    // Only the user bubble shows a time while the assistant is still streaming.
+    // assistant가 스트리밍 중인 동안은 user 말풍선에만 시각이 보인다.
+    const times = container.querySelectorAll("time");
+    expect(times).toHaveLength(1);
+    expect(times[0]).toHaveAttribute("dateTime", createdAt);
+    expect(screen.queryByRole("button", { name: "좋아요" })).not.toBeInTheDocument();
+  });
+
+  it("renders no time for an unparseable createdAt", () => {
+    const { container } = render(
+      <MessageList messages={[doneAssistant({ createdAt: "not-a-date" })]} onFeedback={vi.fn()} />,
+    );
+    expect(container.querySelector("time")).toBeNull();
+    expect(container.textContent).not.toContain("NaN");
+    expect(screen.getByRole("button", { name: "좋아요" })).toBeInTheDocument();
+  });
+
+  it("renders no time when createdAt is absent", () => {
     const { container } = render(
       <MessageList
         messages={[{ id: "u1", role: "user", content: "질문", status: "done" }, doneAssistant()]}

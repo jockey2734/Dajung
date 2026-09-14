@@ -150,15 +150,17 @@ function FeedbackButtons({
 }
 
 // webapp-spec S29: relative time under the user bubble / in the assistant
-// footer row. Rows mapped before S29 have no createdAt → render nothing.
-// `text-muted-foreground`, not `text-muted` — `--color-muted` is the cream
-// surface tone (#FBF4E0), unreadable as text on canvas.
-// webapp-spec S29: user 말풍선 아래 / assistant 푸터 줄에 상대시각. S29 이전에
-// 매핑된 행은 createdAt이 없어 아무것도 렌더하지 않는다. `text-muted`가 아닌
+// footer row. Missing or unparseable createdAt → render nothing (guarded here
+// too, not only in the mapper — an invalid value would otherwise print
+// "NaN.NaN.NaN"). `text-muted-foreground`, not `text-muted` — `--color-muted`
+// is the cream surface tone (#FBF4E0), unreadable as text on canvas.
+// webapp-spec S29: user 말풍선 아래 / assistant 푸터 줄에 상대시각. createdAt이
+// 없거나 해석 불가면 아무것도 렌더하지 않는다 (매퍼만이 아니라 여기서도 가드 —
+// 잘못된 값은 "NaN.NaN.NaN"으로 찍힌다). `text-muted`가 아닌
 // `text-muted-foreground` — `--color-muted`는 크림 표면색(#FBF4E0)이라 canvas
 // 위 글자로는 읽히지 않는다.
 function MessageTime({ createdAt }: { createdAt?: string }) {
-  if (!createdAt) return null;
+  if (!createdAt || Number.isNaN(Date.parse(createdAt))) return null;
   return (
     <time dateTime={createdAt} className="text-caption text-muted-foreground">
       {formatRelativeTime(createdAt)}
@@ -255,7 +257,13 @@ export function MessageList({
                   onPick={(mode) => onAcceptOffer(message.id, mode)}
                 />
               )}
-              {(showFeedback || message.createdAt) && (
+              {/* The footer mounts once, on done — time and feedback buttons
+                  together — instead of a lone "방금" during streaming that
+                  shifts when the buttons arrive (PR #55 review a).
+                  푸터는 done 시점에 한 번만 — 시각과 피드백 버튼을 함께 —
+                  마운트된다. 스트리밍 중 "방금"만 먼저 떴다가 버튼이 오며
+                  밀리는 이중 리플로우를 없앤다 (PR #55 리뷰 a). */}
+              {message.status === "done" && (showFeedback || message.createdAt) && (
                 <div className="flex items-center gap-2">
                   {showFeedback && onFeedback && (
                     <FeedbackButtons

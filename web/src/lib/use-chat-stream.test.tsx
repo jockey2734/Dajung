@@ -141,6 +141,53 @@ describe("useChatStream", () => {
     expect(result.current.messages[0].myFeedback).toBe(1);
   });
 
+  // PR #55 review (b): pydantic's six fractional digits are re-serialized to the
+  // three-digit shape the HTML datetime attribute accepts; garbage becomes undefined.
+  // PR #55 리뷰 (b): pydantic의 소수 여섯 자리를 HTML datetime 속성이 받는 세 자리
+  // 형태로 재직렬화하고, 해석 불가 값은 undefined가 된다.
+  it("normalizes created_at to millisecond ISO and drops unparseable values", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ sessions: [] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "s1",
+          title: "t",
+          messages: [
+            {
+              id: "m1",
+              role: "user",
+              content: "질문",
+              metadata: {},
+              created_at: "2026-09-14T11:18:09.123456+00:00",
+              my_feedback: null,
+            },
+            {
+              id: "m2",
+              role: "assistant",
+              content: "답변",
+              metadata: {},
+              created_at: "not-a-date",
+              my_feedback: null,
+            },
+          ],
+        }),
+      });
+
+    const { result } = renderHook(() => useChatStream());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/sessions"));
+
+    await act(async () => {
+      await result.current.selectSession("s1");
+    });
+
+    expect(result.current.messages[0].createdAt).toBe("2026-09-14T11:18:09.123Z");
+    expect(result.current.messages[1].createdAt).toBeUndefined();
+  });
+
   // webapp-spec S29: loaded rows carry the DB created_at; a live turn is
   // stamped with the client clock until the post-done refresh replaces it.
   // webapp-spec S29: 로드된 행은 DB created_at을 가지고, 라이브 턴은 done 후
@@ -183,7 +230,7 @@ describe("useChatStream", () => {
     await act(async () => {
       await result.current.selectSession("s1");
     });
-    expect(result.current.messages[0].createdAt).toBe("2026-01-01T00:00:00Z");
+    expect(result.current.messages[0].createdAt).toBe("2026-01-01T00:00:00.000Z");
 
     const before = Date.now();
     await act(async () => {
