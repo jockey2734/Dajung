@@ -43,6 +43,19 @@ interface SessionDetailApiResponse {
   }>;
 }
 
+// Pydantic serializes created_at with six fractional digits; the HTML `datetime`
+// attribute allows at most three, and live turns stamp with Date#toISOString
+// (three). Re-serialize through Date so every row carries the same shape; an
+// unparseable value becomes undefined and nothing is rendered (PR #55 review b).
+// pydantic은 created_at을 소수 여섯 자리로 직렬화하는데 HTML `datetime` 속성은
+// 최대 세 자리만 허용하고, 라이브 턴은 Date#toISOString(세 자리)으로 찍는다.
+// Date를 거쳐 재직렬화해 모든 행이 같은 형태를 갖게 하고, 해석 불가 값은
+// undefined로 두어 아무것도 렌더하지 않는다 (PR #55 리뷰 b).
+function normalizeTimestamp(value: string): string | undefined {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? undefined : new Date(parsed).toISOString();
+}
+
 function mapSessionMessages(messages: SessionDetailApiResponse["messages"]): ChatMessage[] {
   return messages.map((m) => ({
     id: m.id,
@@ -52,7 +65,7 @@ function mapSessionMessages(messages: SessionDetailApiResponse["messages"]): Cha
     route: m.metadata.route,
     citations: m.metadata.citations,
     myFeedback: m.my_feedback,
-    createdAt: m.created_at,
+    createdAt: normalizeTimestamp(m.created_at),
   }));
 }
 
