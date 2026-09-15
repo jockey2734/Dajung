@@ -70,6 +70,8 @@ def _spy(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
         "타오바오 직구하면 관세 붙어?",
         "180유로 공구 가능?",
         "$150 넘으면?",
+        "¥1200짜리 센차 살까?",
+        "￥1200짜리 센차 살까?",
     ],
 )
 def test_currency_or_intent_in_question_triggers(
@@ -85,7 +87,7 @@ def test_currency_or_intent_in_question_triggers(
 def test_price_word_plus_currency_in_chunk_triggers(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _spy(monkeypatch)
     out = fx_mod.fx_context_node(
-        {"query": "대홍포 얼마야", "reranked": _reranked("대홍포 156.92 CNY")}
+        {"query": "대홍포 얼마야", "reranked": _reranked("대홍포 123.45 CNY")}
     )
 
     assert calls == [ALL_CURRENCIES]
@@ -95,7 +97,7 @@ def test_price_word_plus_currency_in_chunk_triggers(monkeypatch: pytest.MonkeyPa
 @pytest.mark.parametrize(
     ("query", "chunk"),
     [
-        ("차 종류 알려줘", "대홍포 156.92 CNY"),
+        ("차 종류 알려줘", "대홍포 123.45 CNY"),
         ("대홍포 얼마야", "대홍포는 무이암차다"),
         ("동아리 회칙 알려줘", "회칙 본문"),
     ],
@@ -106,8 +108,34 @@ def test_no_signal_never_fetches_and_leaves_state_untouched(
     calls = _spy(monkeypatch)
     out = fx_mod.fx_context_node({"query": query, "reranked": _reranked(chunk)})
 
-    assert out == {}
+    assert out == {"fx_block": None}
     assert calls == []
+
+
+# S30 review 3: attachment bodies ride along in state["query"] and must not trigger.
+# S30 리뷰 3: 첨부 본문이 state["query"]에 딸려 오지만 트리거하면 안 된다.
+def test_attachment_body_alone_never_triggers(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _spy(monkeypatch)
+    receipt = '<attachment name="receipt.csv">\n품목,금액\n센차,$12.00\n</attachment>'
+    out = fx_mod.fx_context_node(
+        {"query": f"이 영수증 정리해줘\n\n{receipt}", "reranked": _reranked("회칙 본문")}
+    )
+
+    assert out == {"fx_block": None}
+    assert calls == []
+
+
+def test_question_signal_still_triggers_with_attachment_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _spy(monkeypatch)
+    receipt = '<attachment name="receipt.csv">\n품목,금액\n센차,12\n</attachment>'
+    out = fx_mod.fx_context_node(
+        {"query": f"이거 달러로 얼마야\n\n{receipt}", "reranked": _reranked("회칙 본문")}
+    )
+
+    assert calls == [ALL_CURRENCIES]
+    assert "fx_block" in out
 
 
 def test_success_block_text() -> None:
@@ -141,7 +169,8 @@ def test_de_minimis_numbers_come_from_settings(monkeypatch: pytest.MonkeyPatch) 
 
     assert "미국발 미화 250달러" in success
     assert "미화 100달러다" in success
-    assert "면세 한도(미국발 250달러 / 그 외 100달러)" in failure
+    assert "미국발 미화 250달러" in failure
+    assert "미화 100달러다. 타오바오 직구도 100달러 한도가 적용된다." in failure
 
 
 def test_failure_block_names_error_and_carries_no_rates() -> None:
@@ -152,13 +181,44 @@ def test_failure_block_names_error_and_carries_no_rates() -> None:
         "## 환율 조회 실패\n환율 API 인증에 실패했습니다 (키 오류 또는 만료). "
         "현재 환율을 추정하지 말고"
     )
-    assert "사용자에게 직접 확인이 필요하다고 안내한다" in block
     assert (
-        "면세 한도(미국발 200달러 / 그 외 150달러)와 40% 과세 규칙 자체는 그대로 안내해도 된다"
+        "사용자에게 직접 확인이 필요하다고 안내한다.\n"
+        "면세 한도와 과세 규칙 자체는 아래대로 안내한다." in block
+    )
+    # ADR-028: the customs rules ride along even when the lookup failed.
+    # ADR-028: 조회가 실패해도 관세 규칙은 함께 간다.
+    assert "\n\n환율·관세 규칙:\n- 개인 자가사용 면세 한도는 미국발 미화 200달러" in block
+    assert "미화 150달러다. 타오바오 직구도 150달러 한도가 적용된다." in block
+    assert "[물품가 + 현지 내 배송비]" in block
+    assert "전액에 관세+부가세(약 40%)가 부과된다" in block
+    assert (
+        "- 통관 과세환율은 관세청 주간 과세환율이다. 한도 근처 금액은 안전하다고 단정하지 말고"
         in block
     )
+    assert "여유를 두거나 관세청 고시를 직접 확인하도록 안내한다" in block
+    # No conversion clause and no rate lines without a rate.
+    # 환율이 없으니 참고용 환산 조항도 환율 줄도 없다.
+    assert "참고용 환산" not in block
+    assert "매매기준율과 다르다" not in block
     assert re.search(r"\d원", block) is None
     assert "1 USD" not in block
+
+
+# S30 review 8: anything unexpected out of the lookup degrades to a parse block.
+# S30 리뷰 8: 조회에서 나온 예상 밖 예외는 parse 블록으로 강등된다.
+def test_unexpected_exception_degrades_to_parse_block(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(currencies: tuple[str, ...], now: datetime | None = None) -> FxResult | FxError:
+        raise ZeroDivisionError("secret-detail-must-not-leak")
+
+    monkeypatch.setattr(fx_mod, "fetch_rates", boom)
+    out = fx_mod.fx_context_node({"query": "대홍포 위안 가격", "reranked": []})
+
+    block = out["fx_block"]
+    assert block.startswith(
+        "## 환율 조회 실패\n환율 응답을 해석할 수 없습니다 (API 응답 형식 변경 가능). "
+    )
+    assert "secret-detail-must-not-leak" not in block
+    assert "[물품가 + 현지 내 배송비]" in block
 
 
 def test_prepend_fx_block_mirrors_prepend_history() -> None:
@@ -199,7 +259,7 @@ async def test_compiled_graph_passes_route_after_through_fx_context(
 ) -> None:
     calls = _spy(monkeypatch)
     captured: dict[str, Any] = {}
-    reranked = _reranked("대홍포 156.92 CNY")
+    reranked = _reranked("대홍포 123.45 CNY")
 
     def fake_generate(state: State) -> dict[str, Any]:
         captured.update(state)
@@ -251,4 +311,40 @@ async def test_compiled_graph_skips_fetch_when_unsignalled(monkeypatch: pytest.M
     )
 
     assert calls == []
-    assert "fx_block" not in captured
+    assert captured["fx_block"] is None
+
+
+# S30 review 2: MemorySaver keeps State per thread_id, so a signalled turn's block
+# must not leak into the next, unsignalled turn of the same session.
+# S30 리뷰 2: MemorySaver가 thread_id별 State를 보존하므로, 발동한 턴의 블록이 같은
+# 세션의 다음 미발동 턴에 새어 들어가면 안 된다.
+async def test_block_does_not_persist_into_next_turn_of_same_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _spy(monkeypatch)
+    seen: list[str | None] = []
+    reranked = _reranked("회칙 본문")
+
+    def fake_generate(state: State) -> dict[str, Any]:
+        seen.append(state.get("fx_block"))
+        return {"answer": "답변 [1]", "model_used": "fake"}
+
+    monkeypatch.setattr(
+        graph_mod, "router_node", lambda s: {"route": Route.KNOWLEDGE_QUERY, "retries": 0}
+    )
+    monkeypatch.setattr(graph_mod, "retrieve_knowledge", lambda s: {"candidates": reranked})
+    monkeypatch.setattr(graph_mod, "permission_node", lambda s: {})
+    monkeypatch.setattr(
+        graph_mod, "rerank_node", lambda s: {"reranked": reranked, "route_after": "generate"}
+    )
+    monkeypatch.setattr(graph_mod, "generate_node", fake_generate)
+    monkeypatch.setattr(graph_mod, "cite_node", lambda s: {"citations": []})
+    app = graph_mod.build_graph()
+    config = {"configurable": {"thread_id": "s30-same-session"}}
+
+    await app.ainvoke({"query": "대홍포 위안 가격", "user": {"id": "u", "role": "staff"}}, config)
+    await app.ainvoke({"query": "동아리 회칙 알려줘", "user": {"id": "u", "role": "staff"}}, config)
+
+    assert seen[0] is not None
+    assert seen[0].startswith(SUCCESS_HEADER)
+    assert seen[1] is None

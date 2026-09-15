@@ -7,6 +7,7 @@ Lives in core/ so graph nodes import it without SQLAlchemy (same as clock.py).
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from dataclasses import dataclass
@@ -23,6 +24,19 @@ from api.app.core.config import settings
 from api.app.core.logging import get_logger
 
 log = get_logger(__name__)
+
+
+def _silence_httpx_request_log() -> None:
+    # httpx logs 'HTTP Request: GET <full URL>' at INFO on the stdlib `httpx` logger,
+    # and that URL carries authkey. Pin it to WARNING at import and again per fetch —
+    # the Anthropic SDK's ANTHROPIC_LOG=info raises the same logger to INFO later.
+    # httpx는 stdlib `httpx` 로거에 INFO로 'HTTP Request: GET <전체 URL>'을 남기고 그
+    # URL에는 authkey가 실린다. import 시점과 조회 때마다 WARNING으로 고정한다 —
+    # Anthropic SDK의 ANTHROPIC_LOG=info가 나중에 같은 로거를 INFO로 올린다.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+_silence_httpx_request_log()
 
 # oapi host only — www.koreaexim.go.kr was retired 2026-04-30 and no longer answers.
 # oapi 호스트만 — www.koreaexim.go.kr은 2026-04-30 종료돼 더 이상 응답하지 않는다.
@@ -69,7 +83,7 @@ _MESSAGES: dict[FxErrorKind, str] = {
     FxErrorKind.QUOTA: "환율 API 일일 요청 한도(1,000회)를 초과했습니다",
     FxErrorKind.DATA: "환율 API가 요청 형식 오류를 반환했습니다",
     FxErrorKind.NO_DATA: (
-        "최근 {n}일 내 고시 환율을 찾지 못했습니다 (주말·공휴일 또는 고시 시각 이전)"
+        "최근 {n}영업일 내 고시 환율을 찾지 못했습니다 (주말·공휴일 또는 고시 시각 이전)"
     ),
     FxErrorKind.TIMEOUT: "환율 조회가 {n}초 안에 응답하지 않았습니다",
     FxErrorKind.HTTP: "환율 API가 HTTP {status}를 반환했습니다",
@@ -122,10 +136,14 @@ def _parse_table(payload: Any, searchdate: str) -> dict[str, Decimal] | None | F
 
     하루치 JSON을 {cur_unit 기본코드: 환율}로 바꾼다. 그 날 고시가 없으면 None.
     """
-    items = payload if isinstance(payload, list) else [payload]
-    if not items:
+    # The API answers null / {} / [] on non-business days and before posting time —
+    # all mean "no quote for that day", never a format error (S30 review 5).
+    # API는 비영업일·고시 전 시각에 null / {} / []를 돌려준다 — 전부 "그 날 고시 없음"이지
+    # 형식 오류가 아니다 (S30 리뷰 5).
+    if payload is None or payload == "" or payload == {} or payload == []:
         log.info("fx_no_quote", searchdate=searchdate)
         return None
+    items = payload if isinstance(payload, list) else [payload]
     rates: dict[str, Decimal] = {}
     for item in items:
         if not isinstance(item, dict):
@@ -149,6 +167,12 @@ def _parse_table(payload: Any, searchdate: str) -> dict[str, Decimal] | None | F
         except InvalidOperation:
             return _fail(FxErrorKind.PARSE)
         per = unit.group(2)
+        # Infinity / NaN quotes and a "(0)" unit are format errors, not values —
+        # they would otherwise raise out of quantize / division (S30 review 8).
+        # Infinity / NaN 호가와 "(0)" 단위는 값이 아니라 형식 오류다 — 그대로 두면
+        # quantize / 나눗셈에서 예외가 난다 (S30 리뷰 8).
+        if not rate.is_finite() or (per is not None and Decimal(per) == 0):
+            return _fail(FxErrorKind.PARSE)
         rates[unit.group(1)] = rate / Decimal(per) if per else rate
     log.info("fx_quote", searchdate=searchdate, result=_RESULT_OK, currencies=len(rates))
     return rates
@@ -167,6 +191,8 @@ def _request_day(client: httpx.Client, day: date) -> dict[str, Decimal] | None |
         return _fail(FxErrorKind.NETWORK)
     if response.status_code != httpx.codes.OK:
         return _fail(FxErrorKind.HTTP, status=response.status_code)
+    if not response.text.strip():
+        return _parse_table("", searchdate)
     try:
         payload = response.json()
     except ValueError:
@@ -179,18 +205,29 @@ def _fetch_table(start: date) -> FxResult | FxError:
     # posting hour on a business day is unknown, so an empty day just means "walk back".
     # 컷오프는 실 API로 미실측(구현 시점에 키 없음): 영업일 고시 시각을 모르므로
     # 빈 날은 "하루 역행"으로만 다룬다.
+    # fx_lookback_days counts weekday attempts, not calendar days, so a long holiday
+    # run (e.g. 추석 2025-10-03~12) still reaches the last posted quote; holiday
+    # requests are wasted but bounded (S30 review 6).
+    # fx_lookback_days는 달력일이 아니라 평일 시도 횟수다 — 긴 연휴(예: 추석
+    # 2025-10-03~12) 뒤에도 마지막 고시에 닿는다. 공휴일 요청은 낭비되지만 상한이
+    # 있다 (S30 리뷰 6).
+    # Re-pin here, not in the client factory — it must hold whatever builds the client.
+    # 클라이언트 팩토리가 아니라 여기서 다시 고정한다 — 클라이언트를 누가 만들든 유지돼야 한다.
+    _silence_httpx_request_log()
     with _make_client() as client:
-        for offset in range(settings.fx_lookback_days + 1):
-            day = start - timedelta(days=offset)
-            # Quotes never post on weekends — skip without spending the daily quota.
-            # 주말엔 고시가 없다 — 일일 한도를 쓰지 않고 건너뛴다.
-            if day.weekday() >= 5:
-                continue
-            outcome = _request_day(client, day)
-            if isinstance(outcome, FxError):
-                return outcome
-            if outcome is not None:
-                return FxResult(rates=outcome, base_date=day, source=SOURCE_NAME)
+        day = start
+        attempts = 0
+        while attempts < settings.fx_lookback_days:
+            # Quotes never post on weekends — skip without counting or spending quota.
+            # 주말엔 고시가 없다 — 횟수도 한도도 쓰지 않고 건너뛴다.
+            if day.weekday() < 5:
+                attempts += 1
+                outcome = _request_day(client, day)
+                if isinstance(outcome, FxError):
+                    return outcome
+                if outcome is not None:
+                    return FxResult(rates=outcome, base_date=day, source=SOURCE_NAME)
+            day -= timedelta(days=1)
     return _fail(FxErrorKind.NO_DATA, n=settings.fx_lookback_days)
 
 
@@ -202,6 +239,15 @@ def _select(table: FxResult, currencies: tuple[str, ...]) -> FxResult | FxError:
             return _fail(FxErrorKind.MISSING_CURRENCY, currency=code)
         rates[code] = table.rates[unit]
     return FxResult(rates=rates, base_date=table.base_date, source=table.source)
+
+
+def unexpected_error(exc: BaseException) -> FxError:
+    """Demote any unexpected exception to a parse failure — type name only, never str(exc).
+
+    예상 밖 예외를 parse 실패로 강등한다 — 타입명만 남기고 str(exc)는 쓰지 않는다.
+    """
+    log.warning("fx_unexpected", exc_type=type(exc).__name__)
+    return FxError(kind=FxErrorKind.PARSE, detail=_MESSAGES[FxErrorKind.PARSE])
 
 
 def fetch_rates(currencies: tuple[str, ...], now: datetime | None = None) -> FxResult | FxError:

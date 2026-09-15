@@ -7,6 +7,7 @@ Every HTTP exchange goes through httpx.MockTransport — nothing leaves the proc
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from datetime import date, datetime
@@ -142,9 +143,31 @@ def test_lookback_exhausted_reports_no_data(
 
     assert out == FxError(
         FxErrorKind.NO_DATA,
-        "최근 3일 내 고시 환율을 찾지 못했습니다 (주말·공휴일 또는 고시 시각 이전)",
+        "최근 3영업일 내 고시 환율을 찾지 못했습니다 (주말·공휴일 또는 고시 시각 이전)",
     )
+    # Three weekday attempts spanning the weekend: Mon 27, Fri 24, Thu 23 (S30 review 6).
+    # 주말을 넘는 평일 3회 시도: 27(월)·24(금)·23(목) (S30 리뷰 6).
+    assert [r.url.params["searchdate"] for r in seen] == ["20260727", "20260724", "20260723"]
+
+
+# S30 review 5: null / {} / "" / [] bodies mean "no quote that day" → walk back.
+# S30 리뷰 5: null / {} / "" / [] 본문은 "그 날 고시 없음" → 역행.
+@pytest.mark.parametrize("body", [b"null", b"{}", b"", b"   ", b"[]"])
+def test_empty_shaped_bodies_walk_back_instead_of_parse_error(
+    fx_env: _Recorder, monkeypatch: pytest.MonkeyPatch, body: bytes
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params["searchdate"] == "20260727":
+            return httpx.Response(200, content=body, headers={"content-type": "application/json"})
+        return httpx.Response(200, json=FULL_TABLE)
+
+    seen = _install(monkeypatch, handler)
+    out = fetch_rates(("USD",), now=MONDAY)
+
+    assert isinstance(out, FxResult)
+    assert out.base_date == date(2026, 7, 24)
     assert [r.url.params["searchdate"] for r in seen] == ["20260727", "20260724"]
+    assert not [event for event, _kw in fx_env.calls if event == "fx_error"]
 
 
 @pytest.mark.parametrize(
@@ -178,6 +201,26 @@ def test_result_codes_map_to_error_kinds_without_walking_back(
         ),
         (
             lambda request: httpx.Response(200, json=[{"result": 1, "cur_unit": "usd?"}]),
+            FxErrorKind.PARSE,
+            "해석",
+        ),
+        (
+            lambda request: httpx.Response(200, json=[_quote("USD(0)", "1")]),
+            FxErrorKind.PARSE,
+            "해석",
+        ),
+        (
+            lambda request: httpx.Response(200, json=[_quote("USD", "Infinity")]),
+            FxErrorKind.PARSE,
+            "해석",
+        ),
+        (
+            lambda request: httpx.Response(200, json=[_quote("USD", "sNaN")]),
+            FxErrorKind.PARSE,
+            "해석",
+        ),
+        (
+            lambda request: httpx.Response(200, json=[_quote("USD", "NaN")]),
             FxErrorKind.PARSE,
             "해석",
         ),
@@ -238,6 +281,25 @@ def test_ttl_cache_serves_same_searchdate_and_any_subset_from_one_fetch(
     monkeypatch.setattr(time, "monotonic", lambda: expired)
     fetch_rates(("USD",), now=FRIDAY)
     assert len(seen) == 2
+
+
+# S30 review 7: httpx's own 'HTTP Request: GET <url>' INFO line carries authkey; the
+# module pins that logger to WARNING even after something (ANTHROPIC_LOG=info) raised it.
+# S30 리뷰 7: httpx 자체의 'HTTP Request: GET <url>' INFO 줄에 authkey가 실린다. 무언가
+# (ANTHROPIC_LOG=info)가 올려 놓은 뒤에도 모듈이 그 로거를 WARNING으로 고정한다.
+def test_httpx_request_log_never_carries_the_key(
+    fx_env: _Recorder, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger="httpx")
+    assert logging.getLogger("httpx").level == logging.INFO
+    _install(monkeypatch, _by_date({"20260724": FULL_TABLE}))
+
+    out = fetch_rates(("USD",), now=FRIDAY)
+
+    assert isinstance(out, FxResult)
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert not [r for r in caplog.records if r.name == "httpx" and r.levelno < logging.WARNING]
+    assert all(SENTINEL not in record.getMessage() for record in caplog.records)
 
 
 def test_key_never_appears_in_messages_or_logs(
