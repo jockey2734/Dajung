@@ -196,6 +196,26 @@ describe("MessageList message time (webapp-spec S29)", () => {
     );
   });
 
+  it("puts the time before the feedback buttons in a height-locked footer row", () => {
+    const createdAt = "2026-09-14T11:59:30.000Z";
+    const { container, rerender } = render(
+      <MessageList messages={[doneAssistant({ id: "turn-1-assistant", createdAt })]} onFeedback={vi.fn()} />,
+    );
+    // At done the id is still turn-local: time only, in a row already at button height.
+    // done 시점엔 id가 아직 턴 로컬: 시각만 있고 줄은 이미 버튼 높이다.
+    const earlyTime = container.querySelector("time");
+    expect(earlyTime?.parentElement).toHaveClass("min-h-6");
+    expect(screen.queryByRole("button", { name: "좋아요" })).not.toBeInTheDocument();
+
+    // After refreshMessages swaps in the real id, the buttons append after the time.
+    // refreshMessages가 실제 id로 바꾼 뒤 버튼은 시각 뒤에 덧붙는다.
+    rerender(<MessageList messages={[doneAssistant({ createdAt })]} onFeedback={vi.fn()} />);
+    const time = container.querySelector("time");
+    const thumbsUp = screen.getByRole("button", { name: "좋아요" });
+    expect(time?.parentElement).toHaveClass("min-h-6");
+    expect(time?.compareDocumentPosition(thumbsUp) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   it("keeps the assistant footer (time included) until the turn is done", () => {
     const createdAt = "2026-09-14T11:59:30.000Z";
     const { container } = render(

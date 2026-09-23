@@ -262,16 +262,24 @@ export function MessageList({
                   shifts when the buttons arrive (PR #55 review a).
                   푸터는 done 시점에 한 번만 — 시각과 피드백 버튼을 함께 —
                   마운트된다. 스트리밍 중 "방금"만 먼저 떴다가 버튼이 오며
-                  밀리는 이중 리플로우를 없앤다 (PR #55 리뷰 a). */}
+                  밀리는 이중 리플로우를 없앤다 (PR #55 리뷰 a).
+                  Time comes first and the row is locked to the button height
+                  (min-h-6 = icon-xs size-6): at done the id is still turn-local,
+                  so the buttons only append to the right after refreshMessages
+                  swaps in the real id — no x or y shift (webapp-spec S29).
+                  시각을 먼저 두고 줄 높이를 버튼 높이로 고정한다(min-h-6 =
+                  icon-xs size-6): done 시점엔 id가 아직 턴 로컬이라 버튼은
+                  refreshMessages가 실제 id로 바꾼 뒤 오른쪽에 덧붙기만 한다 —
+                  가로·세로 밀림 없음 (webapp-spec S29). */}
               {message.status === "done" && (showFeedback || message.createdAt) && (
-                <div className="flex items-center gap-2">
+                <div className="flex min-h-6 items-center gap-2">
+                  <MessageTime createdAt={message.createdAt} />
                   {showFeedback && onFeedback && (
                     <FeedbackButtons
                       rating={message.myFeedback}
                       onPick={(rating) => onFeedback(message.id, rating)}
                     />
                   )}
-                  <MessageTime createdAt={message.createdAt} />
                 </div>
               )}
             </div>
