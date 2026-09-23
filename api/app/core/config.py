@@ -91,9 +91,11 @@ class Settings(BaseSettings):
     # Quotes post once per business day; 1 h TTL keeps well under the 1,000/day key cap.
     # 고시는 영업일 1회라 1시간 TTL이면 키당 일 1,000회 한도에 한참 못 미친다.
     fx_cache_ttl_s: int = 3600
-    # Walk back this many calendar days for the latest posted quote (weekends/holidays).
-    # 최신 고시를 찾아 이만큼의 달력일을 역행한다 (주말·공휴일).
-    fx_lookback_days: int = 7
+    # Weekday attempts (weekends skipped, uncounted) when walking back to the latest quote.
+    # 10 clears a 추석-length holiday from any weekday after it (S30 2nd correction 11).
+    # 최신 고시를 찾아 역행할 평일 시도 횟수 (주말은 건너뛰고 세지 않음).
+    # 10이면 추석급 연휴 직후 어느 평일에 물어도 닿는다 (S30 2차 정정 11).
+    fx_lookback_days: int = 10
     # Personal-use customs de minimis in USD: all origins vs US-origin (운하 확정 2026-07-26).
     # 개인 자가사용 면세 한도(USD): 일반 vs 미국발 (운하 확정 2026-07-26).
     fx_de_minimis_usd: int = 150

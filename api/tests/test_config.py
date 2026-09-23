@@ -27,7 +27,7 @@ def test_defaults_match_spec() -> None:
     assert s.web_search_max_uses == 3
     assert s.fx_timeout_s == 5.0
     assert s.fx_cache_ttl_s == 3600
-    assert s.fx_lookback_days == 7
+    assert s.fx_lookback_days == 10
     assert s.fx_de_minimis_usd == 150
     assert s.fx_de_minimis_usd_us == 200
 

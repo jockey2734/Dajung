@@ -207,6 +207,11 @@ async def test_chat_stream_injects_attachment_context(
     session_id = uuid.UUID(_events(resp.text)[0][1]["session_id"])
     assert seen_states
     graph_query = seen_states[0]["query"]
+    # The raw question rides separately so nodes never re-parse attachments out of query
+    # (webapp-spec S30 2nd correction 12).
+    # 질문 원문을 따로 실어 노드가 query에서 첨부를 되파싱하지 않게 한다
+    # (webapp-spec S30 2차 정정 12).
+    assert seen_states[0]["question"] == "첨부 요약"
     assert "첨부 요약" in graph_query
     assert '<attachment name="note.txt">' in graph_query
     assert "attached body" in graph_query

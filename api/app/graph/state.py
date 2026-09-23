@@ -22,6 +22,11 @@ class Route(StrEnum):
 
 class State(TypedDict, total=False):
     query: str
+    # The user's question alone — `query` may carry appended <attachment> blocks
+    # (webapp-spec S30 2nd correction 12). Absent on CLI turns, where query is the question.
+    # 사용자 질문 원문만 — `query`에는 <attachment> 블록이 붙을 수 있다
+    # (webapp-spec S30 2차 정정 12). CLI 턴에는 없으며 그땐 query가 곧 질문이다.
+    question: str
     user: dict[str, str]
     mode: Literal["rag", "web", "plain"]
     route: Route

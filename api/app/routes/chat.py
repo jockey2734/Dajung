@@ -255,6 +255,7 @@ async def chat_stream(
     graph_query = f"{body.query}\n\n{attachment_context}" if attachment_context else body.query
     state: State = {
         "query": graph_query,
+        "question": body.query,
         "user": {"id": str(current.id), "email": current.email, "role": current.role},
         "mode": body.mode,
     }

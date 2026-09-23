@@ -20,13 +20,6 @@ from api.app.graph.state import State
 _CURRENCY = re.compile(r"위안|元|CNY|CNH|¥|￥|달러|USD|\$|유로|EUR|€|파운드|GBP|£|엔화|JPY")
 _INTENT = re.compile(r"직구|타오바오|해외\s?배송|배대지|면세|관세|공동\s?구매|공구|환율|환산")
 _PRICE = re.compile(r"가격|얼마|비용|예산|구매|살까|주문")
-# chat.py appends `<attachment name="…">…</attachment>` blocks to state["query"]; the
-# trigger must see the question only, or a receipt's "$12.00" alone fires a lookup
-# (S30 review 3). Bodies are html-escaped, so the closing tag cannot occur inside one.
-# chat.py는 state["query"]에 `<attachment name="…">…</attachment>` 블록을 붙인다.
-# 트리거는 질문만 봐야 한다 — 아니면 영수증의 "$12.00"만으로 조회가 발동한다 (S30
-# 리뷰 3). 본문은 html-escape돼 있어 닫는 태그가 안에 나올 수 없다.
-_ATTACHMENT_BLOCK = re.compile(r"<attachment\b[^>]*>.*?</attachment>", re.DOTALL)
 
 _RULES_HEADER = "환율·관세 규칙:"
 # Success only — there is no rate to convert with in the failure block.
@@ -52,6 +45,15 @@ _SUCCESS_CUSTOMS_RULE = (
 _FAILURE_CUSTOMS_RULE = (
     "- 통관 과세환율은 관세청 주간 과세환율이다. 한도 근처 금액은 안전하다고 단정하지 말고\n"
     "  여유를 두거나 관세청 고시를 직접 확인하도록 안내한다."
+)
+# Literal last resort when rendering itself raises — no .format(), no settings lookup,
+# so the recovery path cannot fail the same way (completes S30 review 8).
+# 렌더 자체가 예외를 낼 때의 최후 문안 — .format()도 settings 조회도 없어 복구 경로가
+# 같은 방식으로 실패할 수 없다 (S30 리뷰 8 완결).
+_RENDER_FALLBACK = (
+    "## 환율 조회 실패\n"
+    "환율 정보를 구성하지 못했습니다. 현재 환율을 추정하지 말고, 사용자에게 직접 확인이 "
+    "필요하다고 안내한다."
 )
 _FAILURE_LEAD = (
     "## 환율 조회 실패\n"
@@ -115,7 +117,11 @@ def fx_context_node(state: State) -> dict[str, Any]:
     신호가 있을 때만 1회 조회한다. 아니면 아무것도 호출하지 않고 블록을 비운다.
     """
     assert "query" in state
-    question = _ATTACHMENT_BLOCK.sub("", state["query"])
+    # Attachment bodies (a receipt's "$12.00") must never trigger — match the raw
+    # question that chat.py carries separately (S30 review 3, 2nd correction 12).
+    # 첨부 본문(영수증의 "$12.00")은 트리거하면 안 된다 — chat.py가 따로 싣는 질문
+    # 원문으로만 매칭한다 (S30 리뷰 3, 2차 정정 12).
+    question = state.get("question", state["query"])
     if not should_fetch_fx(question, state.get("reranked", [])):
         # Explicit None: the checkpointer keeps State across turns of a session, so an
         # omitted key would carry the previous turn's block into an unrelated answer
@@ -123,10 +129,19 @@ def fx_context_node(state: State) -> dict[str, Any]:
         # 명시적 None: 체크포인터가 세션의 턴 간 State를 보존하므로 키를 빼먹으면
         # 직전 턴의 블록이 무관한 답변에 딸려 들어간다 (S30 리뷰 2).
         return {"fx_block": None}
+    # Fetch and render are guarded separately: re-rendering inside the fetch handler
+    # would re-raise if render_fx_block were the thing that failed.
+    # 조회와 렌더를 따로 감싼다: 조회 핸들러 안에서 다시 렌더하면 실패 원인이
+    # render_fx_block일 때 같은 예외가 또 난다.
     try:
-        block = render_fx_block(fetch_rates(DEFAULT_CURRENCIES))
+        outcome: FxResult | FxError = fetch_rates(DEFAULT_CURRENCIES)
     except Exception as exc:
         # A quote-shaped surprise must not end the whole turn as an SSE error.
         # 호가 형태의 돌발 상황이 턴 전체를 SSE 오류로 끝내면 안 된다.
-        block = render_fx_block(unexpected_error(exc))
+        outcome = unexpected_error(exc)
+    try:
+        block = render_fx_block(outcome)
+    except Exception as exc:
+        unexpected_error(exc)
+        block = _RENDER_FALLBACK
     return {"fx_block": block}
