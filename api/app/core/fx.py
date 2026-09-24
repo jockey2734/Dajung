@@ -205,12 +205,12 @@ def _fetch_table(start: date) -> FxResult | FxError:
     # posting hour on a business day is unknown, so an empty day just means "walk back".
     # 컷오프는 실 API로 미실측(구현 시점에 키 없음): 영업일 고시 시각을 모르므로
     # 빈 날은 "하루 역행"으로만 다룬다.
-    # fx_lookback_days counts weekday attempts, not calendar days, so a long holiday
-    # run (e.g. 추석 2025-10-03~12) still reaches the last posted quote; holiday
-    # requests are wasted but bounded (S30 review 6).
-    # fx_lookback_days는 달력일이 아니라 평일 시도 횟수다 — 긴 연휴(예: 추석
-    # 2025-10-03~12) 뒤에도 마지막 고시에 닿는다. 공휴일 요청은 낭비되지만 상한이
-    # 있다 (S30 리뷰 6).
+    # fx_lookback_days counts weekday attempts, not calendar days. Holiday weekdays still
+    # cost an attempt: after 추석 2025 (last quote 10-02) a Monday lookup needs 8 and a
+    # Tuesday 9 — hence the default of 10 (S30 review 6, 2nd correction 11).
+    # fx_lookback_days는 달력일이 아니라 평일 시도 횟수다. 공휴일 평일도 1회를 쓴다:
+    # 추석 2025(마지막 고시 10-02) 뒤 월요일 조회는 8회, 화요일은 9회가 필요해 기본값이
+    # 10이다 (S30 리뷰 6, 2차 정정 11).
     # Re-pin here, not in the client factory — it must hold whatever builds the client.
     # 클라이언트 팩토리가 아니라 여기서 다시 고정한다 — 클라이언트를 누가 만들든 유지돼야 한다.
     _silence_httpx_request_log()

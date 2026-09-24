@@ -19,7 +19,7 @@ import pytest
 
 from api.app.core import fx
 from api.app.core.clock import KST
-from api.app.core.config import settings
+from api.app.core.config import Settings, settings
 from api.app.core.fx import DEFAULT_CURRENCIES, FxError, FxErrorKind, FxResult, fetch_rates
 
 # Synthetic credential sentinel — asserted absent from every message and log line.
@@ -148,6 +148,32 @@ def test_lookback_exhausted_reports_no_data(
     # Three weekday attempts spanning the weekend: Mon 27, Fri 24, Thu 23 (S30 review 6).
     # 주말을 넘는 평일 3회 시도: 27(월)·24(금)·23(목) (S30 리뷰 6).
     assert [r.url.params["searchdate"] for r in seen] == ["20260727", "20260724", "20260723"]
+
+
+# S30 2nd correction 11: the shipped default must cross 추석 2025 (holidays 10-03~10-09,
+# weekend 10-11~12; last quote Thu 10-02) from both the Monday and the Tuesday after.
+# S30 2차 정정 11: 배포 기본값으로 추석 2025(공휴일 10-03~09, 주말 10-11~12, 마지막 고시
+# 10-02(목))를 그 다음 월요일·화요일 어느 쪽에서도 넘어야 한다.
+@pytest.mark.parametrize(
+    ("start", "expected_requests"),
+    [
+        (datetime(2025, 10, 13, 10, 0, tzinfo=KST), 8),
+        (datetime(2025, 10, 14, 10, 0, tzinfo=KST), 9),
+    ],
+)
+def test_default_lookback_crosses_chuseok_2025(
+    fx_env: _Recorder, monkeypatch: pytest.MonkeyPatch, start: datetime, expected_requests: int
+) -> None:
+    default = Settings.model_fields["fx_lookback_days"].default
+    monkeypatch.setattr(settings, "fx_lookback_days", default)
+    seen = _install(monkeypatch, _by_date({"20251002": FULL_TABLE}))
+
+    out = fetch_rates(("USD",), now=start)
+
+    assert isinstance(out, FxResult)
+    assert out.base_date == date(2025, 10, 2)
+    assert len(seen) == expected_requests
+    assert expected_requests <= default
 
 
 # S30 review 5: null / {} / "" / [] bodies mean "no quote that day" → walk back.

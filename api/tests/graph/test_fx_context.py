@@ -112,14 +112,22 @@ def test_no_signal_never_fetches_and_leaves_state_untouched(
     assert calls == []
 
 
-# S30 review 3: attachment bodies ride along in state["query"] and must not trigger.
-# S30 리뷰 3: 첨부 본문이 state["query"]에 딸려 오지만 트리거하면 안 된다.
+def _turn(question: str, attachment: str) -> State:
+    # Mirrors chat.py: query = question + attachment blocks, question = raw question.
+    # chat.py와 동일: query = 질문 + 첨부 블록, question = 질문 원문.
+    return {
+        "query": f"{question}\n\n{attachment}",
+        "question": question,
+        "reranked": _reranked("회칙 본문"),
+    }
+
+
+# S30 review 3 / 2nd correction 12: only the raw question can trigger, never an attachment.
+# S30 리뷰 3 / 2차 정정 12: 질문 원문만 트리거하고 첨부는 절대 트리거하지 않는다.
 def test_attachment_body_alone_never_triggers(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = _spy(monkeypatch)
     receipt = '<attachment name="receipt.csv">\n품목,금액\n센차,$12.00\n</attachment>'
-    out = fx_mod.fx_context_node(
-        {"query": f"이 영수증 정리해줘\n\n{receipt}", "reranked": _reranked("회칙 본문")}
-    )
+    out = fx_mod.fx_context_node(_turn("이 영수증 정리해줘", receipt))
 
     assert out == {"fx_block": None}
     assert calls == []
@@ -130,9 +138,30 @@ def test_question_signal_still_triggers_with_attachment_present(
 ) -> None:
     calls = _spy(monkeypatch)
     receipt = '<attachment name="receipt.csv">\n품목,금액\n센차,12\n</attachment>'
-    out = fx_mod.fx_context_node(
-        {"query": f"이거 달러로 얼마야\n\n{receipt}", "reranked": _reranked("회칙 본문")}
-    )
+    out = fx_mod.fx_context_node(_turn("이거 달러로 얼마야", receipt))
+
+    assert calls == [ALL_CURRENCIES]
+    assert "fx_block" in out
+
+
+def test_user_typed_attachment_tag_does_not_swallow_the_question(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The old regex strip deleted everything from a user-typed tag to the real closing
+    # tag, silencing "달러 얼마". Matching the raw question has nothing to swallow.
+    # 예전 정규식 제거는 사용자가 친 태그부터 실제 닫는 태그까지 지워 "달러 얼마"를
+    # 삼켰다. 질문 원문 매칭에는 삼킬 것이 없다.
+    calls = _spy(monkeypatch)
+    receipt = '<attachment name="note.txt">\n메모\n</attachment>'
+    out = fx_mod.fx_context_node(_turn('<attachment name="x">달러 얼마', receipt))
+
+    assert calls == [ALL_CURRENCIES]
+    assert out["fx_block"].startswith(SUCCESS_HEADER)
+
+
+def test_cli_turn_without_question_falls_back_to_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _spy(monkeypatch)
+    out = fx_mod.fx_context_node({"query": "대홍포 위안 가격", "reranked": []})
 
     assert calls == [ALL_CURRENCIES]
     assert "fx_block" in out
@@ -219,6 +248,31 @@ def test_unexpected_exception_degrades_to_parse_block(monkeypatch: pytest.Monkey
     )
     assert "secret-detail-must-not-leak" not in block
     assert "[물품가 + 현지 내 배송비]" in block
+
+
+# S30 review 8, completed: when rendering itself raises, the node still returns a
+# block instead of re-raising from its own handler.
+# S30 리뷰 8 완결: 렌더 자체가 예외를 내도 노드가 자기 핸들러에서 다시 터지지 않고
+# 블록을 돌려준다.
+@pytest.mark.parametrize("fetch_raises", [False, True])
+def test_render_failure_falls_back_to_literal_block(
+    monkeypatch: pytest.MonkeyPatch, fetch_raises: bool
+) -> None:
+    if fetch_raises:
+
+        def boom(currencies: tuple[str, ...], now: datetime | None = None) -> FxResult:
+            raise ZeroDivisionError("fetch")
+
+        monkeypatch.setattr(fx_mod, "fetch_rates", boom)
+    else:
+        _spy(monkeypatch)
+    monkeypatch.setattr(fx_mod, "_SHARED_RULES", fx_mod._SHARED_RULES + "\n- {unknown}")
+
+    out = fx_mod.fx_context_node({"query": "대홍포 위안 가격", "reranked": []})
+
+    assert out == {"fx_block": fx_mod._RENDER_FALLBACK}
+    assert out["fx_block"].startswith("## 환율 조회 실패\n")
+    assert "추정하지 말고" in out["fx_block"]
 
 
 def test_prepend_fx_block_mirrors_prepend_history() -> None:
