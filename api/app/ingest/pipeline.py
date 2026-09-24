@@ -22,6 +22,7 @@ from api.app.ingest.exclude import is_excluded
 from api.app.ingest.metadata import (
     CsvRow,
     build_payload,
+    csv_row_for,
     doc_id_for,
     infer_semester,
     load_csv_index,
@@ -115,7 +116,7 @@ def _run_ingest_paths(paths: list[Path], *, rebuild: bool, dry_run: bool) -> Ing
         ensure_collection()
 
     for path in paths:
-        csv_row: CsvRow | None = csv_index.get(path.name)
+        csv_row: CsvRow | None = csv_row_for(csv_index, path, settings.data_dir)
         excluded, reason = is_excluded(path, csv_row.category if csv_row else None)
         if excluded:
             report.excluded[reason] += 1
@@ -147,7 +148,7 @@ def _run_ingest_paths(paths: list[Path], *, rebuild: bool, dry_run: bool) -> Ing
                 continue
 
             category = csv_row.category if csv_row else ""
-            semester = infer_semester(path.name, csv_row.modified if csv_row else "")
+            semester = infer_semester(path.name, csv_row.semester if csv_row else "")
             doc_summary = summarize_document(parsed.text)
 
             payloads = []
