@@ -285,7 +285,13 @@ def ingest(
     except ImportError as exc:
         typer.echo(_NOT_IMPLEMENTED.format(branch="feat/cx-cli-ingest"))
         raise typer.Exit(code=1) from exc
-    report = run_ingest(target_dir, rebuild=rebuild, dry_run=dry_run)
+    from api.app.ingest.pipeline import InventoryMissingError
+
+    try:
+        report = run_ingest(target_dir, rebuild=rebuild, dry_run=dry_run)
+    except InventoryMissingError as exc:
+        typer.echo(f"중단: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     typer.echo(report.summary())
 
 

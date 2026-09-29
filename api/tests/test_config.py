@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from api.app.core.config import Settings
@@ -28,6 +30,9 @@ def test_defaults_match_spec() -> None:
     assert s.fx_timeout_s == 5.0
     assert s.fx_cache_ttl_s == 3600
     assert s.fx_lookback_days == 10
+    # Under data/ so the api container reaches it through the data mount.
+    # api 컨테이너가 data 마운트로 닿도록 data/ 아래.
+    assert s.csv_path == Path("data/다정_파일목록.csv")
     assert s.fx_de_minimis_usd == 150
     assert s.fx_de_minimis_usd_us == 200
 

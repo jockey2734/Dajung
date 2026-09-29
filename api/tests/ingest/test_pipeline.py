@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from api.app.ingest.pipeline import run_ingest, run_ingest_file
+from api.app.ingest.pipeline import InventoryMissingError, run_ingest, run_ingest_file
 
 
 @pytest.fixture(autouse=True)
@@ -130,3 +130,47 @@ def test_csv_rules_keep_rosters_and_flagged_files_out(
     assert report.excluded["csv_category"] == 1  # the 회원 category wins over its PII tag
     assert report.excluded["csv_note"] == 1
     assert report.scanned == 3  # guide.md + note.txt + 운영/정리본.txt
+
+
+_INVENTORY_HEADER = "번호,파일명,폴더,상대경로,확장자,카테고리,학기,크기(KB),수정일시,비고\n"
+
+
+@pytest.mark.parametrize("content", [None, _INVENTORY_HEADER])
+def test_ingest_under_data_dir_refuses_without_inventory(
+    tmp_docs: Path, monkeypatch: pytest.MonkeyPatch, content: str | None
+) -> None:
+    # Missing or empty inventory under data/ = every CSV rule silently off → fail closed.
+    # data/ 아래에서 목록이 없거나 비면 CSV 규칙이 조용히 꺼진다 → 중단한다.
+    from api.app.core import config
+
+    inventory = tmp_docs / "list.csv"
+    if content is not None:
+        inventory.write_text(content, encoding="utf-8-sig")
+    monkeypatch.setattr(config.settings, "csv_path", inventory)
+    monkeypatch.setattr(config.settings, "data_dir", tmp_docs)
+
+    with pytest.raises(InventoryMissingError):
+        run_ingest(tmp_docs, dry_run=True)
+    with pytest.raises(InventoryMissingError):
+        run_ingest_file(tmp_docs / "guide.md", dry_run=True)
+
+
+def test_inventory_inside_data_dir_is_never_ingested(
+    tmp_docs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The inventory is a parseable .csv listing every file name — skip it, count it.
+    # 목록은 모든 파일명을 담은 파싱 가능한 .csv다 — 건너뛰고 집계한다.
+    from api.app.core import config
+
+    inventory = tmp_docs / "다정_파일목록.csv"
+    inventory.write_text(
+        _INVENTORY_HEADER + "1,note.txt,(최상위),note.txt,.txt,운영/회의록,2019,1,,\n",
+        encoding="utf-8-sig",
+    )
+    monkeypatch.setattr(config.settings, "csv_path", inventory)
+    monkeypatch.setattr(config.settings, "data_dir", tmp_docs)
+
+    report = run_ingest(tmp_docs, dry_run=True)
+
+    assert report.excluded["inventory"] == 1
+    assert report.scanned == 2  # guide.md + note.txt

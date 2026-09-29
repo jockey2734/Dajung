@@ -5,6 +5,9 @@ CLI 골격 스모크 테스트.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
 from typer.testing import CliRunner
 
 from api.app.cli import app
@@ -35,3 +38,20 @@ def test_stats_without_qdrant_fails_cleanly() -> None:
     result = runner.invoke(app, ["stats"])
     assert result.exit_code == 1
     assert "Qdrant" in result.output
+
+
+def test_ingest_without_inventory_exits_cleanly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A clear one-line refusal and exit code 1, not a traceback.
+    # 트레이스백이 아니라 한 줄 중단 메시지와 종료 코드 1.
+    from api.app.core import config
+
+    (tmp_path / "note.txt").write_text("합성 본문\n", encoding="utf-8")
+    monkeypatch.setattr(config.settings, "csv_path", tmp_path / "missing.csv")
+    monkeypatch.setattr(config.settings, "data_dir", tmp_path)
+
+    result = runner.invoke(app, ["ingest", str(tmp_path), "--dry-run"])
+
+    assert result.exit_code == 1
+    assert "file inventory missing or empty" in result.output

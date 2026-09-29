@@ -22,7 +22,11 @@ class Settings(BaseSettings):
 
     # --- paths ---
     data_dir: Path = Path("data")
-    csv_path: Path = Path("다정_파일목록.csv")
+    # File inventory lives under data/ so the api container sees it through the
+    # existing data mount; the repo root is not mounted (webapp-spec S31 follow-up).
+    # 파일 목록은 data/ 아래에 둔다 — api 컨테이너는 기존 data 마운트로만 볼 수 있고
+    # 레포 루트는 마운트되지 않는다 (webapp-spec S31 후속).
+    csv_path: Path = Path("data/다정_파일목록.csv")
     manifest_path: Path = Path("data/.ingest_manifest.json")
     prompts_dir: Path = Path("prompts")
     upload_dir: Path = Path("data/uploads")
