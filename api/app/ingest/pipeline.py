@@ -35,6 +35,22 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
+
+class InventoryMissingError(RuntimeError):
+    """Refuse to ingest under data/ without the file inventory (fail closed).
+
+    파일 목록 없이 data/ 아래를 인덱싱하지 않는다 (fail closed).
+    Without it every CSV rule — do-not-ingest exclusions, categories, semesters —
+    silently stops applying, so rosters and receipts would be indexed.
+    목록이 없으면 CSV 규칙(ingest 제외·카테고리·학기)이 조용히 전부 꺼져 명단·영수증이
+    색인된다.
+    """
+
+
+def _is_under(path: Path, root: Path) -> bool:
+    return path.resolve().is_relative_to(root.resolve())
+
+
 _EMBEDDER: Embedder | None = None
 
 
@@ -108,6 +124,12 @@ def run_ingest_file(path: Path, dry_run: bool = False) -> IngestReport:
 def _run_ingest_paths(paths: list[Path], *, rebuild: bool, dry_run: bool) -> IngestReport:
     report = IngestReport()
     csv_index = load_csv_index(settings.csv_path)
+    if not csv_index and any(_is_under(path, settings.data_dir) for path in paths):
+        raise InventoryMissingError(
+            f"file inventory missing or empty: {settings.csv_path} — "
+            "refusing to ingest under data/ without it"
+        )
+    inventory = settings.csv_path.resolve()
     manifest = {} if rebuild else load_manifest()
 
     if not dry_run:
@@ -116,6 +138,13 @@ def _run_ingest_paths(paths: list[Path], *, rebuild: bool, dry_run: bool) -> Ing
         ensure_collection()
 
     for path in paths:
+        # The inventory sits inside data/ and .csv is a parseable format — it lists
+        # every file name, so it must never become a document itself.
+        # 목록은 data/ 안에 있고 .csv는 파싱 가능한 형식이다 — 모든 파일명을 담고
+        # 있으므로 그 자체가 문서로 색인되면 안 된다.
+        if path.resolve() == inventory:
+            report.excluded["inventory"] += 1
+            continue
         csv_row: CsvRow | None = csv_row_for(csv_index, path, settings.data_dir)
         excluded, reason = is_excluded(
             path,
