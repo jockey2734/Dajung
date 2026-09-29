@@ -72,3 +72,31 @@ def test_single_file_dry_run_only_scans_target(tmp_docs: Path) -> None:
     report = run_ingest_file(tmp_docs / "guide.md", dry_run=True)
     assert report.scanned == 1
     assert report.errors == []
+
+
+def test_csv_lookup_uses_path_under_data_dir_not_filename(
+    tmp_docs: Path, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Two files named note.txt; the CSV marks only the one under 기록/ as a photo-category
+    # row. A filename-keyed lookup would exclude both.
+    # note.txt가 두 개이고 CSV는 기록/ 아래 것만 사진 분류로 표시한다. 파일명 키
+    # 조회였다면 둘 다 제외됐다.
+    from api.app.core import config
+
+    (tmp_docs / "기록").mkdir()
+    (tmp_docs / "기록" / "note.txt").write_text("사진 설명\n", encoding="utf-8")
+    csv_path = tmp_path_factory.mktemp("csv") / "list.csv"
+    csv_path.write_text(
+        "번호,파일명,폴더,상대경로,확장자,카테고리,학기,크기(KB),수정일시,비고\n"
+        "1,note.txt,기록,기록\\note.txt,.txt,기록/활동사진,2019-1,1,,\n",
+        encoding="utf-8-sig",
+    )
+    # The autouse fixture points pipeline.settings at this same config.settings object.
+    # autouse 픽스처가 pipeline.settings를 바로 이 config.settings 객체로 돌려놨다.
+    monkeypatch.setattr(config.settings, "csv_path", csv_path)
+    monkeypatch.setattr(config.settings, "data_dir", tmp_docs)
+
+    report = run_ingest(tmp_docs, dry_run=True)
+
+    assert report.excluded["image"] == 1
+    assert report.scanned == 2  # guide.md + top-level note.txt

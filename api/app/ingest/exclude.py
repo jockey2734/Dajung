@@ -12,7 +12,9 @@ from pathlib import Path
 # Image formats are excluded in MVP1; Vision captions are a PoC decision.
 # 이미지 포맷은 MVP1에서 제외. Vision 캡션은 PoC 결정 사항.
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".jfif", ".gif"}
-_IMAGE_CATEGORIES = {"로고-브랜딩 이미지", "사진-이미지"}
+# Two-level CSV leaves (Data_prep.md §F-3); the old flat names no longer occur.
+# CSV 2단계 잎 (Data_prep.md §F-3). 옛 평면 이름은 더 이상 나오지 않는다.
+_IMAGE_CATEGORIES = {"홍보/브랜딩-로고", "기록/활동사진"}
 
 
 def is_excluded(path: Path, csv_category: str | None = None) -> tuple[bool, str]:

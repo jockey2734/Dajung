@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from api.app.ingest.exclude import is_excluded
 
 
@@ -36,8 +38,9 @@ def test_image_extension_excluded() -> None:
         assert excluded and reason == "image", name
 
 
-def test_csv_image_category_excluded() -> None:
-    excluded, reason = is_excluded(Path("data/무언가.pdf"), csv_category="로고-브랜딩 이미지")
+@pytest.mark.parametrize("category", ["홍보/브랜딩-로고", "기록/활동사진"])
+def test_csv_image_category_excluded(category: str) -> None:
+    excluded, reason = is_excluded(Path("data/무언가.pdf"), csv_category=category)
     assert excluded and reason == "image"
 
 
