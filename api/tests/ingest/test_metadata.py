@@ -60,10 +60,10 @@ _LEAF_DOC_TYPES = {
     "홍보/부스": "misc",
     "홍보/온라인-에타": "misc",
     "홍보/브랜딩-로고": "misc",
-    "교류/연합-차동연": "misc",
-    "교류/주점-공동행사": "misc",
+    "교류/연합-차동연": "admin_doc",
+    "교류/주점-공동행사": "admin_doc",
     "교류/제휴-제안": "admin_doc",
-    "교류/홈커밍-OB": "misc",
+    "교류/홈커밍-OB": "admin_doc",
     "회원/명단-명부": "misc",
     "회원/신청서-응답": "misc",
     "회원/회비": "misc",
@@ -81,7 +81,17 @@ def test_category_map_covers_every_csv_leaf() -> None:
 def test_handover_leaves_reach_the_handover_route() -> None:
     # The flat-key map sent 운영/인수인계 to misc, outside retrieve_handover's filter.
     # 평면 키 맵은 운영/인수인계를 misc로 보내 retrieve_handover 필터 밖에 두었다.
-    for leaf in ("운영/인수인계", "운영/회의록", "운영/회칙", "운영/체크리스트", "재정/예산안"):
+    for leaf in (
+        "운영/인수인계",
+        "운영/회의록",
+        "운영/회칙",
+        "운영/체크리스트",
+        "재정/예산안",
+        "교류/연합-차동연",
+        "교류/주점-공동행사",
+        "교류/제휴-제안",
+        "교류/홈커밍-OB",
+    ):
         assert category_meta(leaf)[0] in HANDOVER_DOC_TYPES, leaf
 
 
@@ -90,6 +100,7 @@ def test_handover_leaves_reach_the_handover_route() -> None:
     [
         ("운영/새소분류", ("misc", False, "low")),
         ("행정/새소분류", ("admin_doc", False, "low")),
+        ("교류/새소분류", ("admin_doc", False, "low")),
         ("회원/새소분류", ("misc", False, "high")),
         ("기록/새소분류", ("misc", False, "high")),
         ("새대분류/무언가", ("misc", False, "low")),
@@ -152,7 +163,9 @@ def test_modified_timestamp_is_never_a_semester_source() -> None:
     row = CsvRow(category="운영/회의록", folder="", modified="2026-09-14 10:00", semester="")
     payload = build_payload(Path("무패턴파일.docx"), row, _chunk(), "h")
     assert payload["semester"] is None
-    assert payload["last_modified"] == "2026-09-14 10:00"
+    # The copy timestamp is not exposed as last_modified either (S31 correction 4).
+    # 복사 시각은 last_modified로도 노출하지 않는다 (S31 정정 4).
+    assert payload["last_modified"] == ""
 
 
 def test_csv_semester_reaches_payload() -> None:

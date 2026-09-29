@@ -25,6 +25,10 @@ from api.app.ingest.chunker import Chunk
 # 2026-07-07 정책: 운영진 전용 도구 — 명단·채팅기록 공개. 차단은 사건사고뿐이며
 # 그건 인덱스에 아예 안 들어간다(ADR-013). sensitivity=high는 로그 마스킹용 유지.
 CATEGORY_MAP: dict[str, tuple[str, bool, str]] = {
+    # 교류 leaves are all admin_doc so the handover route finds them — §F-7 files that
+    # material under handover knowledge docs (webapp-spec S31 correction 3).
+    # 교류 잎은 전부 admin_doc — 인수인계 경로에서 잡혀야 한다. §F-7이 이 자료를
+    # 인수인계 지식 문서로 보낸다 (webapp-spec S31 정정 3).
     "지식/세미나-동양차": ("tea_knowledge", False, "low"),
     "지식/세미나-서양차": ("tea_knowledge", False, "low"),
     "지식/세미나-커피": ("coffee_knowledge", False, "low"),
@@ -51,10 +55,10 @@ CATEGORY_MAP: dict[str, tuple[str, bool, str]] = {
     "홍보/부스": ("misc", False, "low"),
     "홍보/온라인-에타": ("misc", False, "low"),
     "홍보/브랜딩-로고": ("misc", False, "low"),
-    "교류/연합-차동연": ("misc", False, "low"),
-    "교류/주점-공동행사": ("misc", False, "low"),
+    "교류/연합-차동연": ("admin_doc", False, "low"),
+    "교류/주점-공동행사": ("admin_doc", False, "low"),
     "교류/제휴-제안": ("admin_doc", False, "low"),
-    "교류/홈커밍-OB": ("misc", False, "low"),
+    "교류/홈커밍-OB": ("admin_doc", False, "low"),
     "회원/명단-명부": ("misc", False, "high"),
     "회원/신청서-응답": ("misc", False, "high"),
     "회원/회비": ("misc", False, "high"),
@@ -72,7 +76,7 @@ _PARENT_FALLBACK: dict[str, tuple[str, bool, str]] = {
     "행정": ("admin_doc", False, "low"),
     "재정": ("budget", False, "low"),
     "홍보": ("misc", False, "low"),
-    "교류": ("misc", False, "low"),
+    "교류": ("admin_doc", False, "low"),
     "회원": ("misc", False, "high"),
     "기록": ("misc", False, "high"),
 }
@@ -228,7 +232,6 @@ def build_payload(
     청크 하나의 Qdrant payload를 조립한다 (system-design §4.3).
     """
     category = csv_row.category if csv_row else ""
-    modified = csv_row.modified if csv_row else ""
     doc_type, restricted, sensitivity = category_meta(category)
 
     payload: dict[str, Any] = {
@@ -244,7 +247,11 @@ def build_payload(
         "chunk_index": chunk.chunk_index,
         "total_chunks": chunk.total_chunks,
         "locator": chunk.locator,
-        "last_modified": modified,
+        # Never the CSV 수정일시: it is the 2026 server-copy time, and build_context
+        # would show every archive chunk to the model as modified in 2026 (S31-4).
+        # CSV 수정일시는 넣지 않는다: 2026 서버 복사 시각이라 build_context가 모든
+        # 아카이브 청크를 2026년 수정본처럼 모델에 보여준다 (S31 정정 4).
+        "last_modified": "",
         "restricted": restricted,
         "allowed_users": [],
         "tags": [],
