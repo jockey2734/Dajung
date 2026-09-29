@@ -100,3 +100,33 @@ def test_csv_lookup_uses_path_under_data_dir_not_filename(
 
     assert report.excluded["image"] == 1
     assert report.scanned == 2  # guide.md + top-level note.txt
+
+
+def test_csv_rules_keep_rosters_and_flagged_files_out(
+    tmp_docs: Path, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A whole-tree ingest must not index what the inventory marks "do not ingest" (S31-2).
+    # 트리 전체 ingest도 목록이 ingest 제외로 표시한 것은 색인하지 않는다 (S31 정정 2).
+    from api.app.core import config
+
+    (tmp_docs / "회원").mkdir()
+    (tmp_docs / "회원" / "명부.txt").write_text("합성 명부\n", encoding="utf-8")
+    (tmp_docs / "운영").mkdir()
+    (tmp_docs / "운영" / "회의.txt").write_text("합성 회의록\n", encoding="utf-8")
+    (tmp_docs / "운영" / "정리본.txt").write_text("합성 정리본\n", encoding="utf-8")
+    csv_path = tmp_path_factory.mktemp("csv") / "list.csv"
+    csv_path.write_text(
+        "번호,파일명,폴더,상대경로,확장자,카테고리,학기,크기(KB),수정일시,비고\n"
+        "1,명부.txt,회원,회원\\명부.txt,.txt,회원/명단-명부,2019,1,,PII-정제필요\n"
+        "2,회의.txt,운영,운영\\회의.txt,.txt,운영/회의록,2019,1,,PII-정제필요\n"
+        "3,정리본.txt,운영,운영\\정리본.txt,.txt,운영/회의록,2019-2,1,,hwp변환본\n",
+        encoding="utf-8-sig",
+    )
+    monkeypatch.setattr(config.settings, "csv_path", csv_path)
+    monkeypatch.setattr(config.settings, "data_dir", tmp_docs)
+
+    report = run_ingest(tmp_docs, dry_run=True)
+
+    assert report.excluded["csv_category"] == 1  # the 회원 category wins over its PII tag
+    assert report.excluded["csv_note"] == 1
+    assert report.scanned == 3  # guide.md + note.txt + 운영/정리본.txt
