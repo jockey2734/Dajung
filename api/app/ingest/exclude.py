@@ -61,8 +61,7 @@ def is_excluded(
     # Rule 5 — groups the inventory marks "do not ingest": rosters, chat logs, receipts.
     # 규칙 5 — 목록이 ingest 제외로 표시한 분류: 명단·채팅기록·영수증.
     if csv_category and (
-        csv_category.startswith(_EXCLUDED_CATEGORY_PARENTS)
-        or csv_category in _EXCLUDED_CATEGORIES
+        csv_category.startswith(_EXCLUDED_CATEGORY_PARENTS) or csv_category in _EXCLUDED_CATEGORIES
     ):
         return True, "csv_category"
 
