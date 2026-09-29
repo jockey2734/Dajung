@@ -211,6 +211,20 @@ def test_csv_index_keyed_by_relative_path(tmp_path: Path) -> None:
     assert index["2025-2 인수인계.pdf"].category == "운영/인수인계"
 
 
+def test_csv_index_loads_note_column(tmp_path: Path) -> None:
+    csv_path = tmp_path / "list.csv"
+    csv_path.write_text(
+        "번호,파일명,폴더,상대경로,확장자,카테고리,학기,크기(KB),수정일시,비고\n"
+        "1,a.docx,운영,운영\\a.docx,.docx,운영/회의록,2019,1,,동명이본;PII-정제필요\n"
+        "2,b.docx,운영,운영\\b.docx,.docx,운영/회의록,,1,,\n",
+        encoding="utf-8-sig",
+    )
+    index = load_csv_index(csv_path)
+    assert index["운영/a.docx"].note == "동명이본;PII-정제필요"
+    assert index["운영/a.docx"].semester == "2019"
+    assert index["운영/b.docx"].note == ""
+
+
 def test_csv_row_for_resolves_under_data_dir_only(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     (data_dir / "추가" / "2019 다정").mkdir(parents=True)
