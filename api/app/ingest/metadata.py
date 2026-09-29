@@ -113,6 +113,9 @@ class CsvRow:
     folder: str
     modified: str
     semester: str = ""
+    # Raw `비고` column: ';'-separated tags such as `PII-정제필요` (Data_prep.md §F-4).
+    # `비고` 열 원문: `PII-정제필요` 같은 ';' 구분 태그 (Data_prep.md §F-4).
+    note: str = ""
 
 
 def category_meta(category: str) -> tuple[str, bool, str]:
@@ -156,6 +159,7 @@ def load_csv_index(csv_path: Path) -> dict[str, CsvRow]:
             folder=str(row.get("폴더") or ""),
             modified=str(row.get("수정일시") or ""),
             semester=str(row.get("학기") or ""),
+            note=str(row.get("비고") or ""),
         )
     return index
 
