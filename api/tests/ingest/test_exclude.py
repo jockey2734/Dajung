@@ -110,9 +110,7 @@ def test_csv_note_tag_excluded(note: str) -> None:
     assert excluded and reason == "csv_note"
 
 
-@pytest.mark.parametrize(
-    "note", ["", "동명이본", "hwp변환본", "분류확인필요", "PII-정제필요-완료"]
-)
+@pytest.mark.parametrize("note", ["", "동명이본", "hwp변환본", "분류확인필요", "PII-정제필요-완료"])
 def test_benign_or_unknown_note_passes(note: str) -> None:
     # Tags match exactly; a longer tag that merely contains one is not excluded.
     # 태그는 정확히 일치해야 한다 — 포함만 하는 더 긴 태그는 제외하지 않는다.
