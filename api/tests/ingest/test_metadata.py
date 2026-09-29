@@ -174,6 +174,25 @@ def test_csv_semester_reaches_payload() -> None:
     assert payload["semester"] == "2019-1"
 
 
+def test_csv_year_only_semester_is_kept() -> None:
+    # 259 of the 386 filled CSV rows carry a year only; the half is unknowable
+    # (운하 decision 2026-09-29, webapp-spec S31 correction 1).
+    # 채워진 CSV 학기 386행 중 259행은 연도만 있다. 학기 구분은 알 수 없다
+    # (운하 결정 2026-09-29, webapp-spec S31 정정 1).
+    assert infer_semester("무패턴파일.docx", "2019") == "2019"
+    row = CsvRow(category="운영/회의록", folder="", modified="", semester="2019")
+    payload = build_payload(Path("무패턴파일.docx"), row, _chunk(), "h")
+    assert payload["semester"] == "2019"
+
+
+@pytest.mark.parametrize("value", ["2019년", "19", "2019-3", "2019-1학기"])
+def test_malformed_csv_semester_falls_back_to_filename(value: str) -> None:
+    # Anything other than YYYY or YYYY-N is ignored, never half-parsed.
+    # YYYY·YYYY-N 외 값은 무시한다 — 일부만 해석하지 않는다.
+    assert infer_semester("2025-1 동양차 세미나.pdf", value) == "2025-1"
+    assert infer_semester("무패턴파일.docx", value) is None
+
+
 def test_csv_index_keyed_by_relative_path(tmp_path: Path) -> None:
     csv_path = tmp_path / "list.csv"
     csv_path.write_text(
@@ -190,6 +209,20 @@ def test_csv_index_keyed_by_relative_path(tmp_path: Path) -> None:
     assert index["추가/2019 다정/회의록.docx"].semester == "2019-1"
     assert index["추가/2021 다정/회의록.docx"].semester == "2021-2"
     assert index["2025-2 인수인계.pdf"].category == "운영/인수인계"
+
+
+def test_csv_index_loads_note_column(tmp_path: Path) -> None:
+    csv_path = tmp_path / "list.csv"
+    csv_path.write_text(
+        "번호,파일명,폴더,상대경로,확장자,카테고리,학기,크기(KB),수정일시,비고\n"
+        "1,a.docx,운영,운영\\a.docx,.docx,운영/회의록,2019,1,,동명이본;PII-정제필요\n"
+        "2,b.docx,운영,운영\\b.docx,.docx,운영/회의록,,1,,\n",
+        encoding="utf-8-sig",
+    )
+    index = load_csv_index(csv_path)
+    assert index["운영/a.docx"].note == "동명이본;PII-정제필요"
+    assert index["운영/a.docx"].semester == "2019"
+    assert index["운영/b.docx"].note == ""
 
 
 def test_csv_row_for_resolves_under_data_dir_only(tmp_path: Path) -> None:

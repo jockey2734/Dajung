@@ -117,7 +117,11 @@ def _run_ingest_paths(paths: list[Path], *, rebuild: bool, dry_run: bool) -> Ing
 
     for path in paths:
         csv_row: CsvRow | None = csv_row_for(csv_index, path, settings.data_dir)
-        excluded, reason = is_excluded(path, csv_row.category if csv_row else None)
+        excluded, reason = is_excluded(
+            path,
+            csv_row.category if csv_row else None,
+            csv_row.note if csv_row else None,
+        )
         if excluded:
             report.excluded[reason] += 1
             continue

@@ -97,7 +97,11 @@ _FRONTMATTER_DOC_TYPES = {
     "misc",
 }
 
-_SEM_LABEL = re.compile(r"^20\d{2}-[12]$")
+# CSV 학기: a full semester or a year only — the archive often knows the year but
+# not the half (운하 decision 2026-09-29, webapp-spec S31 correction 1).
+# CSV 학기: 학기 전체 또는 연도만 — 아카이브는 연도만 알고 학기는 모르는 경우가
+# 많다 (운하 결정 2026-09-29, webapp-spec S31 정정 1).
+_SEM_LABEL = re.compile(r"^20\d{2}(?:-[12])?$")
 _SEM_FULL = re.compile(r"20(\d{2})-([12])")
 _SEM_SHORT = re.compile(r"(?<!\d)(2[3-6])-([12])(?!\d)")
 _SEM_DOT = re.compile(r"(?<!\d)(2[3-6])\.(0[1-9]|1[0-2])")
@@ -109,6 +113,9 @@ class CsvRow:
     folder: str
     modified: str
     semester: str = ""
+    # Raw `비고` column: ';'-separated tags such as `PII-정제필요` (Data_prep.md §F-4).
+    # `비고` 열 원문: `PII-정제필요` 같은 ';' 구분 태그 (Data_prep.md §F-4).
+    note: str = ""
 
 
 def category_meta(category: str) -> tuple[str, bool, str]:
@@ -152,6 +159,7 @@ def load_csv_index(csv_path: Path) -> dict[str, CsvRow]:
             folder=str(row.get("폴더") or ""),
             modified=str(row.get("수정일시") or ""),
             semester=str(row.get("학기") or ""),
+            note=str(row.get("비고") or ""),
         )
     return index
 
@@ -169,9 +177,11 @@ def csv_row_for(index: dict[str, CsvRow], path: Path, data_dir: Path) -> CsvRow 
 
 
 def infer_semester(filename: str, csv_semester: str = "") -> str | None:
-    """Return 'YYYY-N': the CSV `학기` column first, then filename patterns.
+    """Return 'YYYY-N' or 'YYYY': the CSV `학기` column first, then filename patterns.
 
-    'YYYY-N'을 반환한다: CSV `학기` 열 우선, 다음 파일명 패턴.
+    'YYYY-N' 또는 'YYYY'를 반환한다: CSV `학기` 열 우선, 다음 파일명 패턴.
+    A year-only CSV value is kept as is — the half is unknowable for those rows.
+    연도만 있는 CSV 값은 그대로 둔다 — 그 행들은 학기 구분을 알 수 없다.
     The modified timestamp is never used — the whole archive was copied to the
     server in 2026, so mtime says nothing about the material (Data_prep.md §F-4).
     수정일시는 쓰지 않는다 — 아카이브 전체가 2026년에 서버로 복사돼 mtime은
