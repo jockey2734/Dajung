@@ -441,11 +441,11 @@ wheels = [
 
 [[package]]
 name = "certifi"
-version = "2026.7.22"
+version = "2026.10.23"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz", hash = "sha256:741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55", size = 138112, upload-time = "2026-07-22T03:35:12.644Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/11/b524cbd9bbdaca58608e4cf4053fd463417549e1959fa8d3aa18319f9555/certifi-2026.10.23.tar.gz", hash = "sha256:a9895e6e2758b371e0545e321a3a8fd1fcfd9829ada8824a936dfb16aaaf36cd", size = 136225, upload-time = "2026-10-23T11:36:16.478Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl", hash = "sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775", size = 136983, upload-time = "2026-07-22T03:35:11.276Z" },
+    { url = "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl", hash = "sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1", size = 135082, upload-time = "2026-10-23T11:36:14.763Z" },
 ]
 
 [[package]]
@@ -934,7 +934,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=0.2" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0" },
     { name = "loguru", specifier = ">=0.7" },
-    { name = "markitdown", extras = ["docx", "pptx", "xlsx"], specifier = ">=0.1.6" },
+    { name = "markitdown", extras = ["docx", "pptx", "xlsx"], specifier = ">=0.1.9" },
     { name = "matplotlib", specifier = ">=3.9" },
     { name = "ollama", specifier = ">=0.4" },
     { name = "polars", specifier = ">=1.0" },
@@ -943,7 +943,7 @@ requires-dist = [
     { name = "pydantic", extras = ["email"], specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "pyjwt", specifier = ">=2.9" },
-    { name = "pymupdf", specifier = ">=1.28.0" },
+    { name = "pymupdf", specifier = ">=2.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "pyyaml", specifier = ">=6.0.3" },
@@ -2636,14 +2636,14 @@ wheels = [
 
 [[package]]
 name = "mammoth"
-version = "1.11.0"
+version = "1.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cobble" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ed/3c/a58418d2af00f2da60d4a51e18cd0311307b72d48d2fffec36a97b4a5e44/mammoth-1.11.0.tar.gz", hash = "sha256:a0f59e442f34d5b6447f4b0999306cbf3e67aaabfa8cb516f878fb1456744637", size = 53142, upload-time = "2025-09-19T10:35:20.373Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/a8/d6691d0b76cf55cf19851e9e189d0356526024d650c131a0969fcd76225d/mammoth-1.13.0.tar.gz", hash = "sha256:b359bee7bc00caba47dacc64286928133dd947917bab852eea01d0c8d8997296", size = 53987, upload-time = "2026-09-26T22:12:09.733Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/54/2e39566a131b13f6d8d193f974cb6a34e81bb7cc2fa6f7e03de067b36588/mammoth-1.11.0-py2.py3-none-any.whl", hash = "sha256:c077ab0d450bd7c0c6ecd529a23bf7e0fa8190c929e28998308ff4eada3f063b", size = 54752, upload-time = "2025-09-19T10:35:18.699Z" },
+    { url = "https://files.pythonhosted.org/packages/af/2a/47d72b27689f3c7cd1d270dd1d4699df2fe3b78b2f293b6b08f565548a45/mammoth-1.13.0-py2.py3-none-any.whl", hash = "sha256:dd7629fa9d0a5e82207b3f481a9dcb8308fb43f6206258e062f11121efba9991", size = 55228, upload-time = "2026-09-26T22:12:08.265Z" },
 ]
 
 [[package]]
@@ -2673,19 +2673,20 @@ wheels = [
 
 [[package]]
 name = "markitdown"
-version = "0.1.7"
+version = "0.1.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
+    { name = "certifi" },
     { name = "charset-normalizer" },
     { name = "defusedxml" },
     { name = "magika" },
     { name = "markdownify" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/59/93/e8a4af0c47551beb6383e226e840cbc811a577b8096eb385251b3fcc8f62/markitdown-0.1.7.tar.gz", hash = "sha256:4d1f3c69cd43b82288fdc3653686d759dcf355ee7c681aa6a855aed98a1e4f44", size = 51767, upload-time = "2026-07-29T18:20:31.496Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/e3/035166ffa9b79c432693e3467f15a0208d863a4b74ca0ef7f40dfd9c5dcd/markitdown-0.1.9.tar.gz", hash = "sha256:8f692236fc104b9251e1b86bdea969c6a1617174fe37eebb78ac6fa62a2894f0", size = 69414, upload-time = "2026-10-21T19:41:19.828Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/16/51d269a754d690ec31d3faa0686c8c14ac955dbc0580c358f256ba3391ec/markitdown-0.1.7-py3-none-any.whl", hash = "sha256:4eca912c87c6aa6897284a7f4bf6769a23bccf8544530f5d8b175fbe3797c916", size = 71093, upload-time = "2026-07-29T18:20:30.226Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/ce/027c1e647909447fa29a5d3eb87d5e98013d49dc0b568602b129a9d06751/markitdown-0.1.9-py3-none-any.whl", hash = "sha256:52f59c48bea9cf887224c56247f648d68beb7aa7af5a12d414748210c83c20ea", size = 90071, upload-time = "2026-10-21T19:41:18.65Z" },
 ]
 
 [package.optional-dependencies]
@@ -4026,20 +4027,40 @@ wheels = [
 
 [[package]]
 name = "pymupdf"
-version = "1.28.2"
+version = "2.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a3/fb/b6761fa2d5266f2cdb24c3b91f4023070ab7848381417678e7a289a1d52a/pymupdf-1.28.2.tar.gz", hash = "sha256:5e0be7908a715aa20333caddd73f1d6f01e4cd0c26e869fa2dd0b7f344da2249", size = 87903557, upload-time = "2026-08-06T21:43:23.321Z" }
+dependencies = [
+    { name = "networkx" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "psutil" },
+    { name = "pymupdf-layout" },
+    { name = "pymupdf4llm" },
+    { name = "pyyaml" },
+    { name = "tabulate" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b0/23/3575cf6652171bba33fd4b41d34ab92c7ee75bb5e5790f5a2a044b9ba49b/pymupdf-2.0.tar.gz", hash = "sha256:7733136f626fffe98677daa53c906eb45f2eb486a6450dbcfd652cbbd760f1e2", size = 88806289, upload-time = "2026-10-19T09:54:11.782Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b4/51/550c9a75c4ff3245cb4ecb7bb95cbe2ab7374230b8e2b7a1f7259444150b/pymupdf-1.28.2-cp310-abi3-macosx_10_15_x86_64.whl", hash = "sha256:5fc315b425ff1f7afdd1ea2f348205cb19b806767daae7ce4d64115799c2bae1", size = 24645079, upload-time = "2026-08-06T21:37:25.001Z" },
-    { url = "https://files.pythonhosted.org/packages/fa/01/3591f781b417b382a8487a2356e927acfe858b1043bab0ec47f6805bb109/pymupdf-1.28.2-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:7113846b35dbf0a033f088e4f4fb543dabeb4b0b12c112966a1ca1ee2d5eacae", size = 23875605, upload-time = "2026-08-06T21:37:40.369Z" },
-    { url = "https://files.pythonhosted.org/packages/d2/86/4a68f080b71b46802178346af46486e1697508e760855ff5f3b218a6dff7/pymupdf-1.28.2-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:3050a233dde1211efe89ada74e2add6238436434159f46097a1423aad2842545", size = 25095554, upload-time = "2026-08-06T21:37:58.485Z" },
-    { url = "https://files.pythonhosted.org/packages/c7/06/dace3e27af26690cb20bead80dbac42941b0841eb689b8aabbd67dde16f0/pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:397d6715c1f0df7548a92d0afd8ce370fc48fa47aeefac16be2bc04a16a8227f", size = 25762500, upload-time = "2026-08-06T21:38:17.438Z" },
-    { url = "https://files.pythonhosted.org/packages/e5/61/4146dfa1d8172a1ce8d59f0eed94896ddefb8deb2274534d0522fbb8abf5/pymupdf-1.28.2-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:f89fb2d86d07d643a269f17a093105057e20c79c1d06c103b53600067b6d2b01", size = 25986309, upload-time = "2026-08-06T21:38:35.472Z" },
-    { url = "https://files.pythonhosted.org/packages/52/60/1fb6e64676f7500ebe89054b9e5bbbe14d3101c92d5f1a40ac9a35227673/pymupdf-1.28.2-cp310-abi3-win32.whl", hash = "sha256:530ef543a3885b3b81cb72a854e7c5a625a9233201221132bb6c31698c6a2bdb", size = 18525353, upload-time = "2026-08-06T21:38:47.697Z" },
-    { url = "https://files.pythonhosted.org/packages/4a/61/d563bbccba262f9dd6d2d35ccb72593648184d886188efb12d9ce8f34dd6/pymupdf-1.28.2-cp310-abi3-win_amd64.whl", hash = "sha256:ebd244918798502d7b4504c90410d1711a4d7675a32584ca30f1bab419ecbffe", size = 19826532, upload-time = "2026-08-06T21:39:00.213Z" },
-    { url = "https://files.pythonhosted.org/packages/e2/93/08f404a1f0155fe24137cf2d3aabd3e2b4b08c62053ed89c60f2611be3e9/pymupdf-1.28.2-cp310-abi3-win_arm64.whl", hash = "sha256:ffe91a24edc75c80da2a4b62f50fc0f54632d34fc8fe4cbc48e5c7ff07cf8fb4", size = 19759252, upload-time = "2026-08-06T21:39:12.937Z" },
-    { url = "https://files.pythonhosted.org/packages/58/8c/d897dcd32a25b58186c968b15ce4324ca029e9d96460de12325314e390be/pymupdf-1.28.2-cp313-abi3-pyemscripten_2025_0_wasm32.whl", hash = "sha256:2e1b574c0fd2cb238021033fd3c0f9c4388816638df064e4bfb56d9d81736dc8", size = 18399403, upload-time = "2026-08-06T21:39:25.008Z" },
-    { url = "https://files.pythonhosted.org/packages/f6/f1/de34a1c53fe2bf8c6e71db84b0ced782d408970c9810d2b456a2ae96814c/pymupdf-1.28.2-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:fd481ed48bef56305c41fb7e05a055c03345c899c7b101dad086258b438f8168", size = 25802333, upload-time = "2026-08-06T21:39:41.426Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/0d/f72a28bb74af3e6ced3766000381f75eea119d59dbcce376ef3fbc886796/pymupdf-2.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:707594e8de4946445489ca3274943911a505a5cb665adf8751a4edfc4c0fff58", size = 67154024, upload-time = "2026-10-19T09:44:03.762Z" },
+    { url = "https://files.pythonhosted.org/packages/45/4c/79c020bec68b7f70ca7e423fb2969a9dc64a5b5cc7e512bd2281f2ae7719/pymupdf-2.0-cp311-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:c9faff6d6ec5882e934a21893917f2c460bbc79f3645318e1f8d726990ab4580", size = 68266297, upload-time = "2026-10-19T09:45:19.236Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/fc/cbdf76a9b9bdacc50e9ef3099cca4c8bb9a369be033abfd0c0097ba4e8ef/pymupdf-2.0-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:f92e8a7ae92c7b1cbffcbe8764166ab1234e0a37b07549f5951e7739241d34f0", size = 68938796, upload-time = "2026-10-19T09:46:30.82Z" },
+    { url = "https://files.pythonhosted.org/packages/31/61/98466052527e1feebbe64f6a63c47933647c3fdea79687a4b69eab7a97a0/pymupdf-2.0-cp311-abi3-win_amd64.whl", hash = "sha256:f59f009b1586d56882739189cd3a4f0240efbfae28ebf268a3763ed9a2006270", size = 62998345, upload-time = "2026-10-19T09:47:34.066Z" },
+]
+
+[[package]]
+name = "pymupdf-layout"
+version = "2.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/37/4e/d8a1eca5fda53a7a288d4f1e0f8d625344bbc84d5d9d4e5b95c73c8789d2/pymupdf_layout-2.0-py3-none-any.whl", hash = "sha256:03ac486c796839eae5c46e910364ad524fb1e83c7dc34553e8e704939d0236a7", size = 927, upload-time = "2026-10-19T09:47:37.187Z" },
+]
+
+[[package]]
+name = "pymupdf4llm"
+version = "2.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b1/86/91671857614bbf931c04532c11572c70fa2031862b1332befcd3bcde1f51/pymupdf4llm-2.0-py3-none-any.whl", hash = "sha256:43d4b4a2d0bf8b9b4d7f21a48875ef0016018dbad6677ef6b01ef2b0f6e392dd", size = 904, upload-time = "2026-10-19T09:47:36.281Z" },
 ]
 
 [[package]]
