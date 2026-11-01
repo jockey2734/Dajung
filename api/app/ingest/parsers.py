@@ -9,6 +9,7 @@ fallback for scan-suspect files, plain text is read directly.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,24 @@ _TEXT_EXTS = {".md", ".txt", ".csv"}
 # Below this many chars a PDF is treated as a scan and retried with docling.
 # 이 글자 수 미만이면 스캔 PDF로 보고 docling으로 재시도한다.
 _PDF_MIN_CHARS = 50
+
+# Page marker handed to opendataloader-pdf; it is written before every page,
+# page 1 included, so splitting on it recovers the exact page list (ADR-030).
+# opendataloader-pdf에 넘기는 페이지 표식. 1페이지를 포함해 모든 페이지 앞에
+# 쓰이므로 이것으로 쪼개면 정확한 페이지 목록이 된다 (ADR-030).
+_ODL_PAGE_SEPARATOR = "<!-- dajung-page %page-number% -->"
+_ODL_PAGE_RE = re.compile(r"^<!-- dajung-page \d+ -->$", re.MULTILINE)
+
+
+def _split_odl_pages(markdown: str) -> list[str]:
+    """Split ODL markdown on the page markers; no marker means one page.
+
+    ODL 마크다운을 페이지 표식으로 나눈다. 표식이 없으면 한 페이지다.
+    """
+    parts = _ODL_PAGE_RE.split(markdown)
+    if len(parts) == 1:
+        return [markdown.strip()]
+    return [part.strip() for part in parts[1:]]
 
 
 class ParserError(Exception):

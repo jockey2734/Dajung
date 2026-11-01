@@ -12,6 +12,7 @@ import pytest
 from api.app.ingest.parsers import (
     ParserEmptyError,
     UnsupportedFormatError,
+    _split_odl_pages,
     parse_file,
 )
 
@@ -77,3 +78,22 @@ def test_no_legacy_fitz_import_in_app_code() -> None:
         if re.search(r"^\s*(import fitz|from fitz )", path.read_text(encoding="utf-8"), re.M)
     ]
     assert offenders == []
+
+
+def test_split_odl_pages_keeps_every_page_including_empty() -> None:
+    # ODL writes the separator before every page, page 1 included (checked on v2.5.11 and v2.5.16).
+    # ODL은 1페이지를 포함해 모든 페이지 앞에 구분자를 쓴다 (v2.5.11·2.5.16에서 확인).
+    markdown = (
+        "<!-- dajung-page 1 -->\n\n# alpha\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n"
+        "<!-- dajung-page 2 -->\n\n"
+        "<!-- dajung-page 3 -->\n\ngamma text\n\n"
+    )
+    assert _split_odl_pages(markdown) == [
+        "# alpha\n\n| a | b |\n|---|---|\n| 1 | 2 |",
+        "",
+        "gamma text",
+    ]
+
+
+def test_split_odl_pages_without_separator_is_one_page() -> None:
+    assert _split_odl_pages("only text\n") == ["only text"]
