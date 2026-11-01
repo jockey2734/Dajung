@@ -80,10 +80,14 @@ def _parse_office(path: Path) -> ParsedDoc:
 
 
 def _parse_pdf(path: Path) -> ParsedDoc:
-    import fitz
+    import pymupdf
 
     try:
-        with fitz.open(path) as doc:
+        # The `pymupdf` name is typed but Document.__init__ is not; strict mypy
+        # flags the call (the old `fitz` name resolved to Any). Checked on 1.28.0 and 2.0.
+        # `pymupdf` 이름은 타입이 있지만 Document.__init__엔 없어 strict mypy가 호출을
+        # 잡는다(옛 `fitz` 이름은 Any였다). 1.28.0·2.0 둘 다 확인.
+        with pymupdf.open(path) as doc:  # type: ignore[no-untyped-call]
             pages = [page.get_text("text") for page in doc]
     except Exception as exc:
         raise ParserError(f"pymupdf failed on {path.name}: {exc}") from exc
