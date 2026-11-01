@@ -8,6 +8,7 @@ Every tunable lives here — no magic numbers anywhere else (Dajung.md §8.1).
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -30,6 +31,21 @@ class Settings(BaseSettings):
     manifest_path: Path = Path("data/.ingest_manifest.json")
     prompts_dir: Path = Path("prompts")
     upload_dir: Path = Path("data/uploads")
+    # PDF text backend (ADR-030): opendataloader-pdf local mode keeps tables and
+    # headings; "pymupdf" is the plain-text fallback and a no-code rollback switch.
+    # PDF 텍스트 백엔드 (ADR-030): opendataloader-pdf 로컬 모드는 표·제목을 살린다.
+    # "pymupdf"는 평문 폴백이자 코드 변경 없는 롤백 스위치다.
+    pdf_parser: Literal["odl", "pymupdf"] = "odl"
+    # A page keeps ODL text only if it has at least this share of PyMuPDF's words;
+    # 0.85 sent 16 of 523 real pages back to PyMuPDF (measured 2026-10-01).
+    # ODL 페이지는 PyMuPDF 단어 수의 이 비율 이상일 때만 ODL 텍스트를 쓴다.
+    # 0.85에서 실제 523쪽 중 16쪽이 PyMuPDF로 돌아갔다 (2026-10-01 실측).
+    pdf_odl_min_word_ratio: float = 0.85
+    # PyMuPDF text with at least this share of control/private-use chars is a font-decoding
+    # failure and never replaces an ODL page (6 of 63 real PDFs, 2026-09-29).
+    # 제어·사용자정의 문자가 이 비율 이상인 PyMuPDF 텍스트는 폰트 디코딩 실패로 보고
+    # ODL 페이지를 대체하지 않는다 (실제 PDF 63건 중 6건, 2026-09-29).
+    pdf_garbled_char_ratio: float = 0.05
 
     # --- anthropic ---
     anthropic_api_key: str = ""

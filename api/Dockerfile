@@ -17,6 +17,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 FROM deps AS runtime
 
+# opendataloader-pdf runs its bundled JAR via `java` (ADR-030); headless JRE only.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends default-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY api ./api
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini

@@ -35,6 +35,11 @@ def test_defaults_match_spec() -> None:
     assert s.csv_path == Path("data/다정_파일목록.csv")
     assert s.fx_de_minimis_usd == 150
     assert s.fx_de_minimis_usd_us == 200
+    # PDF extraction backend and per-page fallback (ADR-030).
+    # PDF 추출 백엔드와 페이지 단위 폴백 (ADR-030).
+    assert s.pdf_parser == "odl"
+    assert s.pdf_odl_min_word_ratio == 0.85
+    assert s.pdf_garbled_char_ratio == 0.05
 
 
 def test_env_prefix_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -52,3 +57,8 @@ def test_secrets_default_empty() -> None:
     assert s.anthropic_api_key == ""
     assert s.qdrant_api_key == ""
     assert s.koreaexim_api_key == ""
+
+
+def test_pdf_parser_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DAJUNG_PDF_PARSER", "pymupdf")
+    assert Settings(_env_file=None).pdf_parser == "pymupdf"  # type: ignore[call-arg]

@@ -884,6 +884,7 @@ dependencies = [
     { name = "markitdown", extra = ["docx", "pptx", "xlsx"] },
     { name = "matplotlib" },
     { name = "ollama" },
+    { name = "opendataloader-pdf" },
     { name = "polars" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pyarrow" },
@@ -937,6 +938,7 @@ requires-dist = [
     { name = "markitdown", extras = ["docx", "pptx", "xlsx"], specifier = ">=0.1.9" },
     { name = "matplotlib", specifier = ">=3.9" },
     { name = "ollama", specifier = ">=0.4" },
+    { name = "opendataloader-pdf", specifier = "==2.5.16" },
     { name = "polars", specifier = ">=1.0" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
     { name = "pyarrow", specifier = ">=17.0" },
@@ -3259,6 +3261,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cf/4c/c73f828fdbcd37eaf21d08fa852544a3ca7c2dbb3ea76873d64f2ea413d1/opencv_python-5.0.0.93-cp37-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:c8de2dec111122a02e8beb28e16c31904992dfd6186560b142a92c71403c1039", size = 73783032, upload-time = "2026-07-02T06:55:03.415Z" },
     { url = "https://files.pythonhosted.org/packages/e2/4b/edaf83b996ca5a1a3d8ccad485706b9c6d4742b13b9c4586bf1c1e7d9423/opencv_python-5.0.0.93-cp37-abi3-win32.whl", hash = "sha256:4b4b1a34c79bf8d3738e3cfe9a9e67b51a79663f6b692cbdad8c31f570da4157", size = 35564734, upload-time = "2026-07-02T05:49:57.704Z" },
     { url = "https://files.pythonhosted.org/packages/21/f0/9fa6e85cb10c8eb36a0222d27e50fe381b86ce49a55446bf39f491727564/opencv_python-5.0.0.93-cp37-abi3-win_amd64.whl", hash = "sha256:f90ba04b8f73bc5c3814037699739f0156f597338a98f05956c684e7c3ca10d2", size = 44000345, upload-time = "2026-07-02T05:49:54.971Z" },
+]
+
+[[package]]
+name = "opendataloader-pdf"
+version = "2.5.16"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/49/49b7a77954931bccbbb9d9589712b212ea639b8507a3943a8347a5a2e8d5/opendataloader_pdf-2.5.16.tar.gz", hash = "sha256:ad67f7ad0fbf489854743703f0c7d4bcec720fb811d28d1b5b5263f32cdeb601", size = 22656782, upload-time = "2026-10-27T05:59:16.132Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/1c/aa21519207e457a2621cefa1619220c7cd5d421071ff9fd91c3a262f8d6e/opendataloader_pdf-2.5.16-py3-none-any.whl", hash = "sha256:7ec1a9dfaed9d0e55f6ad3b6d358cedd714e608c643e6aaaf87b5b24c731e444", size = 22667977, upload-time = "2026-10-27T05:59:13.172Z" },
 ]
 
 [[package]]
