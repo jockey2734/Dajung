@@ -37,6 +37,18 @@ _ODL_PAGE_RE = re.compile(r"^<!-- dajung-page \d+ -->$", re.MULTILINE)
 # Words for the per-page coverage check: Hangul/Latin/digit runs of 2+ chars.
 # 페이지 커버리지 비교용 단어: 한글·라틴·숫자 2자 이상 연속.
 _WORD_RE = re.compile(r"[가-힣A-Za-z0-9]{2,}")
+# Markdown structure ODL wraps around text: table separator rows, table rows (a line
+# that starts and ends with a pipe), heading markers and <br>. The scan check strips it
+# so an empty table grid from a scanned page still reads as text-less (2 real scans,
+# 2026-11-01). Patterns stay within one line so plain text is never touched.
+# ODL이 본문에 두르는 마크다운 구조: 표 구분 행, 표 행(`|`로 시작하고 끝나는 줄),
+# 제목 표식, <br>. 스캔 판정에서 걷어내, 스캔 페이지의 빈 표 격자가 본문 없음으로
+# 읽히게 한다 (실제 스캔 2건, 2026-11-01). 패턴은 한 줄 안에서만 맞아 평문은 건드리지 않는다.
+_MD_TABLE_SEP_RE = re.compile(
+    r"^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$", re.MULTILINE
+)
+_MD_TABLE_ROW_RE = re.compile(r"^[ \t]*\|.*\|[ \t]*$", re.MULTILINE)
+_MD_HEADING_RE = re.compile(r"^#{1,6}[ \t]+", re.MULTILINE)
 
 
 def _split_odl_pages(markdown: str) -> list[str]:
@@ -111,7 +123,7 @@ def _parse_office(path: Path) -> ParsedDoc:
 
 def _parse_pdf(path: Path) -> ParsedDoc:
     pages = _pdf_pages(path)
-    if sum(len(p.strip()) for p in pages) < _PDF_MIN_CHARS:
+    if sum(_text_chars(p) for p in pages) < _PDF_MIN_CHARS:
         # Scan-suspect: retry with docling before giving up (Dajung.md §8.3).
         # 스캔 의심: 포기 전에 docling으로 재시도한다 (Dajung.md §8.3).
         text = _parse_pdf_docling(path)
@@ -120,6 +132,23 @@ def _parse_pdf(path: Path) -> ParsedDoc:
         return ParsedDoc(source_path=path, text=text, kind="pdf", pages=None)
 
     return ParsedDoc(source_path=path, text="\n\n".join(pages), kind="pdf", pages=pages)
+
+
+def _text_chars(page: str) -> int:
+    # The pre-ADR-030 measure (stripped length) after removing markup only; text without
+    # markup counts exactly as before, so the pymupdf rollback keeps its old behaviour.
+    # ADR-030 이전 척도(strip 후 길이)를 문법만 걷어낸 뒤 적용한다. 문법 없는 텍스트는
+    # 이전과 똑같이 세므로 pymupdf 롤백은 옛 동작을 그대로 유지한다.
+    page = _MD_TABLE_SEP_RE.sub("", page)
+    page = _MD_TABLE_ROW_RE.sub(_table_row_text, page)
+    page = _MD_HEADING_RE.sub("", page)
+    page = page.replace("<br>", " ")
+    return len(page.strip())
+
+
+def _table_row_text(match: re.Match[str]) -> str:
+    cells = (cell.strip() for cell in match.group(0).strip().strip("|").split("|"))
+    return " ".join(cell for cell in cells if cell)
 
 
 def _pdf_pages(path: Path) -> list[str]:

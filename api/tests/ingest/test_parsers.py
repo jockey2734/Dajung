@@ -19,6 +19,7 @@ from api.app.ingest.parsers import (
     ParserEmptyError,
     UnsupportedFormatError,
     _split_odl_pages,
+    _text_chars,
     parse_file,
 )
 
@@ -261,3 +262,53 @@ def test_real_opendataloader_jar_splits_pages(tmp_path: Path) -> None:
     pages = _parse_pdf_odl(_real_pdf(tmp_path, ("alpha page one", "", "gamma page three")))
     assert len(pages) == 3
     assert "alpha" in pages[0] and pages[1] == "" and "gamma" in pages[2]
+
+
+def test_odl_table_skeleton_without_text_still_goes_to_docling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A scanned page can come back as an empty table grid: over 50 raw chars, no text.
+    # The scan check must count text, not markdown markup (2 real scans, 2026-11-01).
+    # 스캔 페이지가 빈 표 격자로 나올 수 있다: 원시 50자 이상, 본문 없음.
+    # 스캔 판정은 마크다운 문법이 아니라 본문을 세야 한다 (실제 스캔 2건, 2026-11-01).
+    monkeypatch.setattr(settings, "pdf_parser", "odl")
+    grid = "|  |  |  |\n|---|---|---|\n|  |  |  |\n|  |  |  |"
+    _fake_odl(monkeypatch, _odl_md(grid, "# 1", grid))
+    monkeypatch.setattr(parsers, "_parse_pdf_pymupdf", lambda path: ["", "", ""])
+    docling_calls: list[Path] = []
+
+    def fake_docling(path: Path) -> str:
+        docling_calls.append(path)
+        return ""
+
+    monkeypatch.setattr(parsers, "_parse_pdf_docling", fake_docling)
+    with pytest.raises(ParserEmptyError):
+        parse_file(_real_pdf(tmp_path, ("", "", "")))
+    assert len(docling_calls) == 1
+
+
+def test_short_text_inside_odl_table_is_not_a_scan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Markup is removed, text is kept: a short poster table still counts as text.
+    # 문법은 걷어내고 본문은 남긴다: 짧은 포스터 표도 본문으로 센다.
+    monkeypatch.setattr(settings, "pdf_parser", "odl")
+    table = (
+        "| 행사 | 가상의 정기 다회 |\n|---|---|\n"
+        "| 일시 | 2099년 1월 1일 토요일 오후 2시 |\n"
+        "| 장소 | 예시 건물 101호 소회의실 |"
+    )
+    _fake_odl(monkeypatch, _odl_md(table))
+    monkeypatch.setattr(parsers, "_parse_pdf_pymupdf", lambda path: [""])
+    parsed = parse_file(_real_pdf(tmp_path, ("x",)))
+
+    assert parsed.pages == [table]
+
+
+def test_scan_check_counts_plain_text_exactly_as_before() -> None:
+    # Plain PyMuPDF text, inline pipes included, keeps its old stripped length so the
+    # pymupdf rollback classifies scans as before (3 real posters use "A | B", 2026-11-01).
+    # 인라인 `|`가 있는 PyMuPDF 평문도 옛 strip 길이 그대로라 pymupdf 롤백의 스캔 판정이
+    # 이전과 같다 (실제 포스터 3건이 "A | B"를 쓴다, 2026-11-01).
+    plain = "  가상 다회 | 2099-1 | 예시 건물 101호\n\n문의: 운영진  "
+    assert _text_chars(plain) == len(plain.strip())
