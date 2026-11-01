@@ -61,6 +61,7 @@ dependencies = [
     "pymupdf>=2.0",
     "pyyaml>=6.0.3",
     "apscheduler>=3.10",
+    "opendataloader-pdf==2.5.16",
 ]
 
 [project.scripts]
