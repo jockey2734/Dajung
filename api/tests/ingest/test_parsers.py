@@ -250,3 +250,14 @@ def test_text_less_odl_output_still_goes_to_docling(
     monkeypatch.setattr(parsers, "_parse_pdf_docling", lambda path: "")
     with pytest.raises(ParserEmptyError):
         parse_file(_real_pdf(tmp_path, ("",)))
+
+
+@pytest.mark.external
+def test_real_opendataloader_jar_splits_pages(tmp_path: Path) -> None:
+    # Needs Java 11+ and the opendataloader-pdf wheel; run with `pytest -m external`.
+    # Java 11+와 opendataloader-pdf wheel이 필요하다. `pytest -m external`로 실행.
+    from api.app.ingest.parsers import _parse_pdf_odl
+
+    pages = _parse_pdf_odl(_real_pdf(tmp_path, ("alpha page one", "", "gamma page three")))
+    assert len(pages) == 3
+    assert "alpha" in pages[0] and pages[1] == "" and "gamma" in pages[2]
