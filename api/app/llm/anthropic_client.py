@@ -119,6 +119,28 @@ def fallback_system_blocks(
     return _system_blocks(rules, user_memory)
 
 
+def _request_kwargs(
+    model: str,
+    system_blocks: list[dict[str, Any]],
+    user_text: str,
+    max_tokens: int,
+) -> dict[str, Any]:
+    """Build messages.create kwargs, leaving out fields that must not be sent.
+
+    messages.create 인자를 만들되, 보내면 안 되는 필드는 뺀다.
+    """
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": user_text}],
+    }
+    # SDK 1.x sends system=None as null and the API rejects it, so omit it when empty.
+    # SDK 1.x는 system=None을 null로 보내 API가 거부하므로, 비어 있으면 생략한다.
+    if system_blocks:
+        kwargs["system"] = system_blocks
+    return kwargs
+
+
 def complete(
     model: str,
     system_blocks: list[dict[str, Any]],
@@ -130,10 +152,7 @@ def complete(
     논스트리밍 완성. system 블록(캐시 포함)은 호출자가 구성한다.
     """
     response = _client().messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system_blocks if system_blocks else None,
-        messages=[{"role": "user", "content": user_text}],
+        **_request_kwargs(model, system_blocks, user_text, max_tokens),
     )
     parts = [block.text for block in response.content if block.type == "text"]
     return "".join(parts)
@@ -151,10 +170,7 @@ def complete_with_web_search(
     Anthropic 웹 검색으로 답하고 인용 URL을 정규화한다.
     """
     response = _client().messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system_blocks if system_blocks else None,
-        messages=[{"role": "user", "content": user_text}],
+        **_request_kwargs(model, system_blocks, user_text, max_tokens),
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}],
     )
     parts: list[str] = []
