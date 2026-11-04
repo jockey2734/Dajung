@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from api.app.core.config import settings
 from api.app.llm import anthropic_client
 
 
@@ -103,6 +104,28 @@ def test_web_search_omits_system_when_no_blocks(monkeypatch: pytest.MonkeyPatch)
         model="claude-sonnet-5", system_blocks=[], user_text="질문", max_tokens=50, max_uses=1
     )
     assert "system" not in captured
+
+
+def test_haiku_calls_disable_thinking(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Haiku 5.5 thinks by default; Haiku calls are short (titles, headers, memory) and
+    # stay thinking-free as on Haiku 4.5 so thinking cannot eat the small max_tokens.
+    # Haiku 5.5는 기본으로 생각한다. Haiku 호출은 짧아(제목·헤더·메모리) 4.5처럼 생각 없이
+    # 둬서 작은 max_tokens를 생각이 다 쓰지 않게 한다.
+    monkeypatch.setattr(settings, "model_haiku", "claude-haiku-5-5")
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-haiku-5-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert captured["thinking"] == {"type": "disabled"}
+
+
+def test_non_haiku_calls_leave_thinking_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "model_haiku", "claude-haiku-5-5")
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-sonnet-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert "thinking" not in captured
 
 
 def test_complete_reads_text_blocks_by_type(monkeypatch: pytest.MonkeyPatch) -> None:

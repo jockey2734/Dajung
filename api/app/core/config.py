@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # --- anthropic ---
     anthropic_api_key: str = ""
-    model_haiku: str = "claude-haiku-4-5"
+    model_haiku: str = "claude-haiku-5-5"
     model_sonnet: str = "claude-sonnet-5"
     # Used from MVP2 (budget HITL) onward.
     # MVP2(예산 HITL)부터 사용한다.

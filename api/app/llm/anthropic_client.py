@@ -138,6 +138,12 @@ def _request_kwargs(
     # SDK 1.x는 system=None을 null로 보내 API가 거부하므로, 비어 있으면 생략한다.
     if system_blocks:
         kwargs["system"] = system_blocks
+    # Haiku calls are short (titles, headers, memory); keep them thinking-free as on
+    # Haiku 4.5, since Haiku 5.5 thinks by default and thinking counts toward max_tokens.
+    # Haiku 호출은 짧다(제목·헤더·메모리). Haiku 5.5는 기본으로 생각하고 생각도
+    # max_tokens에 포함되므로, Haiku 4.5처럼 생각 없이 호출한다.
+    if model == settings.model_haiku:
+        kwargs["thinking"] = {"type": "disabled"}
     return kwargs
 
 
