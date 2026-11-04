@@ -66,15 +66,33 @@ def test_web_search_tool_and_citations_are_normalized(
 
 
 def _capture_create(
-    monkeypatch: pytest.MonkeyPatch, content: list[Any] | None = None
+    monkeypatch: pytest.MonkeyPatch,
+    content: list[Any] | None = None,
+    stop_reason: str = "end_turn",
+    stop_details: Any = None,
 ) -> dict[str, Any]:
     captured: dict[str, Any] = {}
 
-    def create(**kwargs: Any) -> Any:
-        captured.update(kwargs)
-        return SimpleNamespace(content=content or [SimpleNamespace(type="text", text="답")])
+    def response() -> Any:
+        return SimpleNamespace(
+            content=content or [SimpleNamespace(type="text", text="답")],
+            stop_reason=stop_reason,
+            stop_details=stop_details,
+            model="fake",
+        )
 
-    fake_client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    def create(**kwargs: Any) -> Any:
+        captured.update(kwargs, endpoint="messages")
+        return response()
+
+    def beta_create(**kwargs: Any) -> Any:
+        captured.update(kwargs, endpoint="beta")
+        return response()
+
+    fake_client = SimpleNamespace(
+        messages=SimpleNamespace(create=create),
+        beta=SimpleNamespace(messages=SimpleNamespace(create=beta_create)),
+    )
     monkeypatch.setattr(anthropic_client, "_client", lambda: fake_client)
     return captured
 
@@ -142,3 +160,128 @@ def test_complete_reads_text_blocks_by_type(monkeypatch: pytest.MonkeyPatch) -> 
         model="claude-sonnet-5", system_blocks=[], user_text="질문", max_tokens=50
     )
     assert out == "제목"
+
+
+def test_sonnet_calls_use_server_side_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "model_sonnet", "claude-sonnet-5-5")
+    monkeypatch.setattr(settings, "anthropic_fallbacks", True)
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-sonnet-5-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert captured["endpoint"] == "beta"
+    assert captured["betas"] == ["server-side-fallback-2026-07-01"]
+    assert captured["fallbacks"] == "default"
+
+
+def test_opus_calls_use_server_side_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "model_opus", "claude-opus-5-5")
+    monkeypatch.setattr(settings, "anthropic_fallbacks", True)
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-opus-5-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert captured["endpoint"] == "beta"
+    assert captured["fallbacks"] == "default"
+
+
+def test_fallback_switch_off_uses_plain_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "model_sonnet", "claude-sonnet-5-5")
+    monkeypatch.setattr(settings, "anthropic_fallbacks", False)
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-sonnet-5-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert captured["endpoint"] == "messages"
+    assert "fallbacks" not in captured and "betas" not in captured
+
+
+def test_haiku_calls_skip_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Haiku 5.5 has no server-side fallback.
+    # Haiku 5.5에는 서버 측 폴백이 없다.
+    monkeypatch.setattr(settings, "model_haiku", "claude-haiku-5-5")
+    monkeypatch.setattr(settings, "anthropic_fallbacks", True)
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-haiku-5-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert captured["endpoint"] == "messages"
+
+
+def test_effort_goes_into_output_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-sonnet-5-5",
+        system_blocks=[],
+        user_text="질문",
+        max_tokens=50,
+        effort="high",
+    )
+    assert captured["output_config"] == {"effort": "high"}
+
+
+def test_no_effort_sends_no_output_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-sonnet-5-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert "output_config" not in captured
+
+
+def test_web_search_passes_effort_and_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "model_sonnet", "claude-sonnet-5-5")
+    monkeypatch.setattr(settings, "anthropic_fallbacks", True)
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete_with_web_search(
+        model="claude-sonnet-5-5",
+        system_blocks=[],
+        user_text="질문",
+        max_tokens=50,
+        max_uses=1,
+        effort="low",
+    )
+    assert captured["endpoint"] == "beta"
+    assert captured["output_config"] == {"effort": "low"}
+    assert captured["tools"][0]["name"] == "web_search"
+
+
+def test_refusal_raises_with_category(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A refusal is HTTP 200 with stop_reason "refusal"; content is empty or partial.
+    # 거절은 HTTP 200 + stop_reason "refusal"이며 content는 비었거나 일부다.
+    _capture_create(
+        monkeypatch,
+        content=[SimpleNamespace(type="text", text="일부")],
+        stop_reason="refusal",
+        stop_details=SimpleNamespace(category="general_harms"),
+    )
+    with pytest.raises(anthropic_client.ModelRefusalError) as caught:
+        anthropic_client.complete(
+            model="claude-sonnet-5-5", system_blocks=[], user_text="질문", max_tokens=50
+        )
+    assert caught.value.category == "general_harms"
+
+
+def test_refusal_without_details_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    _capture_create(monkeypatch, content=[], stop_reason="refusal", stop_details=None)
+    with pytest.raises(anthropic_client.ModelRefusalError) as caught:
+        anthropic_client.complete_with_web_search(
+            model="claude-sonnet-5-5",
+            system_blocks=[],
+            user_text="질문",
+            max_tokens=50,
+            max_uses=1,
+        )
+    assert caught.value.category is None
+
+
+def test_fallback_switch_block_is_not_answer_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A served fallback adds a "fallback" block before the rescuing model's text.
+    # 폴백이 동작하면 구조 모델의 텍스트 앞에 "fallback" 블록이 붙는다.
+    _capture_create(
+        monkeypatch,
+        content=[SimpleNamespace(type="fallback"), SimpleNamespace(type="text", text="답변")],
+    )
+    out = anthropic_client.complete(
+        model="claude-sonnet-5-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert out == "답변"
