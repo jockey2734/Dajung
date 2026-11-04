@@ -43,6 +43,7 @@ def test_generate_node_injects_memory_and_attachment_rule(
         system_blocks: list[dict[str, Any]],
         user_text: str,
         max_tokens: int,
+        effort: str | None = None,
     ) -> str:
         captured["texts"] = [block["text"] for block in system_blocks]
         captured["user_text"] = user_text
@@ -82,6 +83,7 @@ def test_generate_handover_injects_memory_and_attachment_rule(
         system_blocks: list[dict[str, Any]],
         user_text: str,
         max_tokens: int,
+        effort: str | None = None,
     ) -> str:
         captured["texts"] = [block["text"] for block in system_blocks]
         captured["user_text"] = user_text
@@ -115,6 +117,7 @@ def test_generate_node_omits_history_block_when_empty(monkeypatch: pytest.Monkey
         system_blocks: list[dict[str, Any]],
         user_text: str,
         max_tokens: int,
+        effort: str | None = None,
     ) -> str:
         captured["user_text"] = user_text
         return "답변 [1]"
@@ -173,6 +176,7 @@ def test_generate_node_places_fx_block_before_material_without_marker(
         system_blocks: list[dict[str, Any]],
         user_text: str,
         max_tokens: int,
+        effort: str | None = None,
     ) -> str:
         captured["texts"] = [block["text"] for block in system_blocks]
         captured["user_text"] = user_text
@@ -199,6 +203,7 @@ def test_generate_handover_places_fx_block_before_material(
         system_blocks: list[dict[str, Any]],
         user_text: str,
         max_tokens: int,
+        effort: str | None = None,
     ) -> str:
         captured["texts"] = [block["text"] for block in system_blocks]
         captured["user_text"] = user_text
@@ -229,6 +234,7 @@ def test_generate_nodes_omit_fx_block_when_absent(monkeypatch: pytest.MonkeyPatc
         system_blocks: list[dict[str, Any]],
         user_text: str,
         max_tokens: int,
+        effort: str | None = None,
     ) -> str:
         captured["user_text"] = user_text
         return "답변 [1]"

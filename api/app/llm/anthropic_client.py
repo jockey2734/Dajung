@@ -13,7 +13,31 @@ from functools import lru_cache
 from typing import Any, Literal
 
 from api.app.core.clock import date_context
-from api.app.core.config import settings
+from api.app.core.config import Effort, settings
+from api.app.core.logging import get_logger
+
+log = get_logger(__name__)
+
+# Server-side refusal fallback, "default" form: Anthropic picks the fallback model by
+# refusal category. The array form uses a different header.
+# 서버 측 거절 폴백의 "default" 형식: 거절 분류에 따라 Anthropic이 폴백 모델을 고른다.
+# 배열 형식은 다른 헤더를 쓴다.
+_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+# Shown instead of an empty answer when the request was declined.
+# 요청이 거절됐을 때 빈 답변 대신 보여 준다.
+REFUSAL_ANSWER = "이 질문에는 답변할 수 없습니다. 질문을 바꿔 다시 물어봐 주세요."
+
+
+class ModelRefusalError(RuntimeError):
+    """The model or its safety classifiers declined the request (stop_reason refusal).
+
+    모델 또는 안전 분류기가 요청을 거절했다 (stop_reason refusal).
+    """
+
+    def __init__(self, category: str | None) -> None:
+        super().__init__(f"model refused the request (category={category})")
+        self.category = category
 
 
 @lru_cache(maxsize=1)
@@ -124,6 +148,7 @@ def _request_kwargs(
     system_blocks: list[dict[str, Any]],
     user_text: str,
     max_tokens: int,
+    effort: Effort | None,
 ) -> dict[str, Any]:
     """Build messages.create kwargs, leaving out fields that must not be sent.
 
@@ -144,7 +169,39 @@ def _request_kwargs(
     # max_tokens에 포함되므로, Haiku 4.5처럼 생각 없이 호출한다.
     if model == settings.model_haiku:
         kwargs["thinking"] = {"type": "disabled"}
+    # Effort is how much the 5.5 models think; callers pick it per route.
+    # effort는 5.5 모델이 생각하는 양이다. 호출자가 경로별로 정한다.
+    if effort is not None:
+        kwargs["output_config"] = {"effort": effort}
     return kwargs
+
+
+def _create(**kwargs: Any) -> Any:
+    """Send the request; Sonnet/Opus go through the beta endpoint with fallback.
+
+    요청을 보낸다. Sonnet·Opus는 폴백을 켠 beta 엔드포인트로 보낸다.
+    """
+    # Haiku 5.5 has no server-side fallback, so only Sonnet and Opus opt in.
+    # Haiku 5.5에는 서버 측 폴백이 없어 Sonnet·Opus만 사용한다.
+    if settings.anthropic_fallbacks and kwargs["model"] in (
+        settings.model_sonnet,
+        settings.model_opus,
+    ):
+        return _client().beta.messages.create(**kwargs, betas=[_FALLBACK_BETA], fallbacks="default")
+    return _client().messages.create(**kwargs)
+
+
+def _raise_on_refusal(response: Any) -> None:
+    """Raise ModelRefusalError when the whole chain declined; log the category only.
+
+    폴백까지 모두 거절하면 ModelRefusalError를 낸다. 로그에는 분류만 남긴다.
+    """
+    if getattr(response, "stop_reason", None) != "refusal":
+        return
+    details = getattr(response, "stop_details", None)
+    category = getattr(details, "category", None) if details is not None else None
+    log.warning("model_refusal", category=category, model=getattr(response, "model", None))
+    raise ModelRefusalError(category)
 
 
 def complete(
@@ -152,14 +209,16 @@ def complete(
     system_blocks: list[dict[str, Any]],
     user_text: str,
     max_tokens: int,
+    effort: Effort | None = None,
 ) -> str:
     """Non-streaming completion; caller builds system blocks (incl. cache_control).
 
     논스트리밍 완성. system 블록(캐시 포함)은 호출자가 구성한다.
+    Raises ModelRefusalError on a refusal; partial text is discarded.
+    거절이면 ModelRefusalError를 내고, 일부 생성된 텍스트는 버린다.
     """
-    response = _client().messages.create(
-        **_request_kwargs(model, system_blocks, user_text, max_tokens),
-    )
+    response = _create(**_request_kwargs(model, system_blocks, user_text, max_tokens, effort))
+    _raise_on_refusal(response)
     parts = [block.text for block in response.content if block.type == "text"]
     return "".join(parts)
 
@@ -170,15 +229,19 @@ def complete_with_web_search(
     user_text: str,
     max_tokens: int,
     max_uses: int,
+    effort: Effort | None = None,
 ) -> tuple[str, list[dict[str, str]]]:
     """Complete with Anthropic web search and normalize cited URLs.
 
     Anthropic 웹 검색으로 답하고 인용 URL을 정규화한다.
+    Raises ModelRefusalError on a refusal.
+    거절이면 ModelRefusalError를 낸다.
     """
-    response = _client().messages.create(
-        **_request_kwargs(model, system_blocks, user_text, max_tokens),
+    response = _create(
+        **_request_kwargs(model, system_blocks, user_text, max_tokens, effort),
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}],
     )
+    _raise_on_refusal(response)
     parts: list[str] = []
     citations: list[dict[str, str]] = []
     seen_urls: set[str] = set()

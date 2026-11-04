@@ -15,9 +15,15 @@ from api.app.core.config import Settings
 def test_defaults_match_spec() -> None:
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.model_haiku == "claude-haiku-5-5"
-    assert s.model_sonnet == "claude-sonnet-5"
-    assert s.model_opus == "claude-opus-5"
+    assert s.model_sonnet == "claude-sonnet-5-5"
+    assert s.model_opus == "claude-opus-5-5"
     assert s.router_model == "gemma4:e4b"
+    # Thinking counts toward max_tokens on the 5.5 models.
+    # 5.5 모델에서는 생각도 max_tokens에 포함된다.
+    assert s.max_tokens_generate == 4096
+    assert s.sonnet_effort_complex == "high"
+    assert s.sonnet_effort_other == "low"
+    assert s.anthropic_fallbacks is True
     assert s.rerank_threshold == 0.5
     assert s.retrieve_limit == 20
     assert s.rerank_top_k == 5

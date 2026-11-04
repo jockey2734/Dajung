@@ -11,8 +11,13 @@ from api.app.core.config import settings
 from api.app.graph.history import prepend_history
 from api.app.graph.nodes.fx_context import prepend_fx_block
 from api.app.graph.state import State
-from api.app.llm.anthropic_client import answer_system_blocks, complete
-from api.app.rag.answer import build_context, pick_model
+from api.app.llm.anthropic_client import (
+    REFUSAL_ANSWER,
+    ModelRefusalError,
+    answer_system_blocks,
+    complete,
+)
+from api.app.rag.answer import build_context, pick_effort, pick_model
 
 _NO_SOURCE_ANSWER = (
     "관련 자료를 찾지 못했습니다. 인덱싱된 자료가 있는지 `dajung stats`로 확인하세요."
@@ -32,10 +37,14 @@ def generate_node(state: State) -> dict[str, Any]:
     model = pick_model("knowledge", state["query"], len(reranked))
     material = prepend_fx_block(f"자료:\n{build_context(reranked)}", state.get("fx_block"))
     user_text = f"질문: {state['query']}\n\n{material}"
-    answer = complete(
-        model=model,
-        system_blocks=answer_system_blocks(state.get("user_memory")),
-        user_text=prepend_history(user_text, state.get("history", [])),
-        max_tokens=settings.max_tokens_generate,
-    )
+    try:
+        answer = complete(
+            model=model,
+            system_blocks=answer_system_blocks(state.get("user_memory")),
+            user_text=prepend_history(user_text, state.get("history", [])),
+            max_tokens=settings.max_tokens_generate,
+            effort=pick_effort(model),
+        )
+    except ModelRefusalError:
+        answer = REFUSAL_ANSWER
     return {"answer": answer, "model_used": model}

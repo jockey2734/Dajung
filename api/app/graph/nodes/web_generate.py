@@ -11,6 +11,8 @@ from api.app.core.config import settings
 from api.app.graph.history import prepend_history
 from api.app.graph.state import State
 from api.app.llm.anthropic_client import (
+    REFUSAL_ANSWER,
+    ModelRefusalError,
     complete_with_web_search,
     fallback_system_blocks,
 )
@@ -25,13 +27,17 @@ def web_generate_node(state: State) -> dict[str, Any]:
     """
     assert "query" in state
     user_text = prepend_history(f"질문: {state['query']}", state.get("history", []))
-    answer, citations = complete_with_web_search(
-        model=settings.model_sonnet,
-        system_blocks=fallback_system_blocks("web", state.get("user_memory")),
-        user_text=user_text,
-        max_tokens=settings.max_tokens_generate,
-        max_uses=settings.web_search_max_uses,
-    )
+    try:
+        answer, citations = complete_with_web_search(
+            model=settings.model_sonnet,
+            system_blocks=fallback_system_blocks("web", state.get("user_memory")),
+            user_text=user_text,
+            max_tokens=settings.max_tokens_generate,
+            max_uses=settings.web_search_max_uses,
+            effort=settings.sonnet_effort_other,
+        )
+    except ModelRefusalError:
+        return {"answer": REFUSAL_ANSWER, "model_used": settings.model_sonnet, "citations": []}
     body = answer.strip()
     return {
         "answer": f"{WEB_DISCLAIMER}\n{body}" if body else WEB_DISCLAIMER,

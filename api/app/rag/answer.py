@@ -11,9 +11,14 @@ import json as jsonlib
 import re
 from typing import Any
 
-from api.app.core.config import settings
+from api.app.core.config import Effort, settings
 from api.app.core.logging import get_logger
-from api.app.llm.anthropic_client import answer_system_blocks, complete
+from api.app.llm.anthropic_client import (
+    REFUSAL_ANSWER,
+    ModelRefusalError,
+    answer_system_blocks,
+    complete,
+)
 from api.app.rag.qdrant_store import build_permission_filter, hybrid_search
 from api.app.rag.reranker import rerank
 
@@ -49,6 +54,14 @@ def pick_model(route: str, question: str, n_hits: int) -> str:
     if n_hits >= 3 and len(question) > 50:
         return settings.model_sonnet
     return settings.model_haiku
+
+
+def pick_effort(model: str) -> Effort | None:
+    """Effort for RAG answers: Sonnet here is the complex tier; Haiku sends none.
+
+    RAG 답변의 effort: 여기서 Sonnet은 복합 등급이고, Haiku는 보내지 않는다.
+    """
+    return settings.sonnet_effort_complex if model == settings.model_sonnet else None
 
 
 def build_context(reranked: list[dict[str, Any]]) -> str:
@@ -197,12 +210,16 @@ def run_ask(
         user_text = f"질문: {question}\n\n자료:\n{build_context(reranked)}"
         if picked == "handover":
             user_text = f"{_HANDOVER_FORMAT}\n\n{user_text}"
-        answer = complete(
-            model=model,
-            system_blocks=answer_system_blocks(),
-            user_text=user_text,
-            max_tokens=settings.max_tokens_generate,
-        )
+        try:
+            answer = complete(
+                model=model,
+                system_blocks=answer_system_blocks(),
+                user_text=user_text,
+                max_tokens=settings.max_tokens_generate,
+                effort=pick_effort(model),
+            )
+        except ModelRefusalError:
+            answer = REFUSAL_ANSWER
         citations = citations_for(answer, reranked)
 
     if json_out:

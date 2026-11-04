@@ -12,6 +12,10 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Effort levels accepted by the 5.5 models.
+# 5.5 모델이 받는 effort 단계.
+Effort = Literal["low", "medium", "high", "xhigh", "max"]
+
 
 class Settings(BaseSettings):
     """Runtime configuration, loaded from env vars with the DAJUNG_ prefix.
@@ -50,11 +54,22 @@ class Settings(BaseSettings):
     # --- anthropic ---
     anthropic_api_key: str = ""
     model_haiku: str = "claude-haiku-5-5"
-    model_sonnet: str = "claude-sonnet-5"
+    model_sonnet: str = "claude-sonnet-5-5"
     # Used from MVP2 (budget HITL) onward.
     # MVP2(예산 HITL)부터 사용한다.
-    model_opus: str = "claude-opus-5"
-    max_tokens_generate: int = 2048
+    model_opus: str = "claude-opus-5-5"
+    # Sonnet 5.5 effort: complex routes (handover, long multi-hit questions) vs the
+    # web/plain modes. High thinks before almost every reply; low skips it on simple ones.
+    # Sonnet 5.5 effort: 복합 경로(인수인계, 다건 히트 긴 질문) vs 웹·일반 모드.
+    # high는 거의 매 답변 전에 생각하고, low는 단순 질문에서 생략한다.
+    sonnet_effort_complex: Effort = "high"
+    sonnet_effort_other: Effort = "low"
+    # Server-side refusal fallback (beta) for Sonnet/Opus; off switch if the beta misbehaves.
+    # Sonnet·Opus의 서버 측 거절 폴백(beta). beta에 문제가 생기면 끄는 스위치.
+    anthropic_fallbacks: bool = True
+    # Thinking counts toward max_tokens on the 5.5 models.
+    # 5.5 모델에서는 생각도 max_tokens에 포함된다.
+    max_tokens_generate: int = 4096
     max_tokens_header: int = 200
 
     # --- ollama ---

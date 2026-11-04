@@ -11,7 +11,12 @@ from api.app.core.config import settings
 from api.app.graph.history import prepend_history
 from api.app.graph.nodes.fx_context import prepend_fx_block
 from api.app.graph.state import State
-from api.app.llm.anthropic_client import answer_system_blocks, complete
+from api.app.llm.anthropic_client import (
+    REFUSAL_ANSWER,
+    ModelRefusalError,
+    answer_system_blocks,
+    complete,
+)
 from api.app.rag.answer import build_context
 
 _FORMAT = (
@@ -39,10 +44,14 @@ def generate_handover(state: State) -> dict[str, Any]:
     role_line = f"질문자 직책: {role_hint}\n" if role_hint else ""
     material = prepend_fx_block(f"자료:\n{build_context(reranked)}", state.get("fx_block"))
     user_text = f"{_FORMAT}\n\n{role_line}질문: {state['query']}\n\n{material}"
-    answer = complete(
-        model=settings.model_sonnet,
-        system_blocks=answer_system_blocks(state.get("user_memory")),
-        user_text=prepend_history(user_text, state.get("history", [])),
-        max_tokens=settings.max_tokens_generate,
-    )
+    try:
+        answer = complete(
+            model=settings.model_sonnet,
+            system_blocks=answer_system_blocks(state.get("user_memory")),
+            user_text=prepend_history(user_text, state.get("history", [])),
+            max_tokens=settings.max_tokens_generate,
+            effort=settings.sonnet_effort_complex,
+        )
+    except ModelRefusalError:
+        answer = REFUSAL_ANSWER
     return {"answer": answer, "model_used": settings.model_sonnet}
