@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from api.app.core.config import settings
 from api.app.llm import anthropic_client
 
 
@@ -62,3 +63,82 @@ def test_web_search_tool_and_citations_are_normalized(
             "url": "https://example.test/guide",
         }
     ]
+
+
+def _capture_create(
+    monkeypatch: pytest.MonkeyPatch, content: list[Any] | None = None
+) -> dict[str, Any]:
+    captured: dict[str, Any] = {}
+
+    def create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return SimpleNamespace(content=content or [SimpleNamespace(type="text", text="답")])
+
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=create))
+    monkeypatch.setattr(anthropic_client, "_client", lambda: fake_client)
+    return captured
+
+
+def test_complete_omits_system_when_no_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    # SDK 1.x sends system=None as null, which the API rejects with a 400.
+    # SDK 1.x는 system=None을 null로 보내고 API는 400으로 거부한다.
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-sonnet-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert "system" not in captured
+
+
+def test_complete_passes_system_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _capture_create(monkeypatch)
+    blocks = [{"type": "text", "text": "rules"}]
+    anthropic_client.complete(
+        model="claude-sonnet-5", system_blocks=blocks, user_text="질문", max_tokens=50
+    )
+    assert captured["system"] == blocks
+
+
+def test_web_search_omits_system_when_no_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete_with_web_search(
+        model="claude-sonnet-5", system_blocks=[], user_text="질문", max_tokens=50, max_uses=1
+    )
+    assert "system" not in captured
+
+
+def test_haiku_calls_disable_thinking(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Haiku 5.5 thinks by default; Haiku calls are short (titles, headers, memory) and
+    # stay thinking-free as on Haiku 4.5 so thinking cannot eat the small max_tokens.
+    # Haiku 5.5는 기본으로 생각한다. Haiku 호출은 짧아(제목·헤더·메모리) 4.5처럼 생각 없이
+    # 둬서 작은 max_tokens를 생각이 다 쓰지 않게 한다.
+    monkeypatch.setattr(settings, "model_haiku", "claude-haiku-5-5")
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-haiku-5-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert captured["thinking"] == {"type": "disabled"}
+
+
+def test_non_haiku_calls_leave_thinking_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "model_haiku", "claude-haiku-5-5")
+    captured = _capture_create(monkeypatch)
+    anthropic_client.complete(
+        model="claude-sonnet-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert "thinking" not in captured
+
+
+def test_complete_reads_text_blocks_by_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A response can start with a thinking block; only text blocks form the answer.
+    # 응답이 thinking 블록으로 시작할 수 있다. 답은 text 블록만으로 만든다.
+    _capture_create(
+        monkeypatch,
+        content=[
+            SimpleNamespace(type="thinking", thinking="", signature="sig"),
+            SimpleNamespace(type="text", text="제목"),
+        ],
+    )
+    out = anthropic_client.complete(
+        model="claude-sonnet-5", system_blocks=[], user_text="질문", max_tokens=50
+    )
+    assert out == "제목"
