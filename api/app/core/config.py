@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     # 5.5 모델에서는 생각도 max_tokens에 포함된다.
     max_tokens_generate: int = 4096
     max_tokens_header: int = 200
+    # Contextual Retrieval header: hard length cap on the [맥락: …] line, and how many
+    # acronyms / club terms from the source the prompt asks to keep verbatim
+    # (tuned on qwen3.5:9b, 2026-11-05).
+    # Contextual Retrieval 헤더: [맥락: …] 줄 길이 상한, 그리고 프롬프트가 원문 그대로
+    # 쓰라고 넘기는 원문 속 영문 약어·동아리 용어 개수 (qwen3.5:9b로 조정, 2026-11-05).
+    header_context_max_chars: int = 100
+    header_keep_max_acronyms: int = 5
+    header_keep_max_terms: int = 3
 
     # --- ollama ---
     ollama_base_url: str = "http://localhost:11434"
